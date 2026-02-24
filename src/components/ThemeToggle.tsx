@@ -22,9 +22,9 @@ export function ThemeToggle() {
             {mounted ? (
                 <>
                     {theme === "dark" ? (
-                        <Sun className="h-4 w-4 text-[var(--muted)]" />
+                        <Sun className="h-4 w-4 text-[var(--muted-foreground)]" />
                     ) : (
-                        <Moon className="h-4 w-4 text-[var(--muted)]" />
+                        <Moon className="h-4 w-4 text-[var(--muted-foreground)]" />
                     )}
                 </>
             ) : (

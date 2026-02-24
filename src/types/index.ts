@@ -165,20 +165,6 @@ export interface SpotifyCollection {
     tracks: SpotifyTrack[];
 }
 
-// ─── History ────────────────────────────────────────────────────────────────
-
-export interface HistoryEntry {
-    jobId: string;
-    url: string;
-    platform: Platform;
-    title: string;
-    type: MediaType;
-    status: "completed" | "failed";
-    filename?: string;
-    size?: string;
-    downloadedAt: string;
-}
-
 // ─── App Store ──────────────────────────────────────────────────────────────
 
 export interface AppState {
@@ -189,16 +175,11 @@ export interface AppState {
     activeJob: DownloadJob | null;
     progress: ProgressEvent | null;
 
-    // History
-    history: HistoryEntry[];
-
     // Actions
     setCurrentUrl: (url: string) => void;
     setDetectedPlatform: (platform: PlatformInfo | null) => void;
     setMetadata: (metadata: MediaMetadata | null) => void;
     setActiveJob: (job: DownloadJob | null) => void;
     setProgress: (progress: ProgressEvent | null) => void;
-    addHistoryEntry: (entry: HistoryEntry) => void;
-    clearHistory: () => void;
     reset: () => void;
 }

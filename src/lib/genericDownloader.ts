@@ -5,6 +5,7 @@ import { createWriteStream } from "fs";
 import type { MediaMetadata, MediaType } from "@/types";
 import { detectPlatform } from "@/lib/platforms";
 import type { ProgressCallback } from "@/lib/ytdlp";
+import { formatBytes } from "@/lib/utils";
 
 const DOWNLOAD_DIR = path.join(os.tmpdir(), "linkever-downloads");
 
@@ -20,12 +21,12 @@ const URL_PATTERNS: [RegExp, MediaType][] = [
     [/\.(mp4|webm|mov|avi|mkv|flv|wmv|3gp)(\?|$)/i, "video"],
     // Video patterns - path segments
     [/\/(video|watch|stream|clip)s?\//i, "video"],
-    
+
     // Audio patterns - file extensions
     [/\.(mp3|wav|flac|aac|ogg|m4a|wma|opus)(\?|$)/i, "audio"],
     // Audio patterns - path segments
     [/\/(audio|music|sound|track)s?\//i, "audio"],
-    
+
     // Image patterns - file extensions
     [/\.(jpg|jpeg|png|gif|webp|svg|ico|bmp|tiff|heic|heif)(\?|$)/i, "image"],
     // Image patterns - path segments
@@ -51,23 +52,23 @@ export function detectMediaTypeFromUrl(url: string): MediaType | null {
 
 function contentTypeToMediaType(contentType: string, url: string): MediaType {
     const ct = contentType.toLowerCase();
-    
+
     // Check content-type prefix
     if (ct.startsWith("video/")) return "video";
     if (ct.startsWith("audio/")) return "audio";
     if (ct.startsWith("image/")) return "image";
-    
+
     // Additional content-type specific mappings
     if (ct.includes("octet-stream") || ct.includes("stream")) {
         // Try to infer from URL for octet-stream
         const urlType = detectMediaTypeFromUrl(url);
         if (urlType) return urlType;
     }
-    
+
     // Application types that might be media
     if (ct.includes("quicktime") || ct.includes("x-msvideo")) return "video";
     if (ct.includes("x-matroska")) return "video";
-    
+
     return "file";
 }
 
@@ -126,10 +127,23 @@ function extractFilename(url: string, headers: Headers): string {
         if (unquotedMatch) return unquotedMatch[1];
     }
 
-    // 2. URL path basename
+    // 2. URL path basename with suffix stripping
     try {
-        const urlPath = new URL(url).pathname;
+        const urlObj = new URL(url);
+        // Strip X/Twitter suffixes like :large, :orig
+        let urlPath = urlObj.pathname;
+        if (urlPath.includes(":")) {
+            urlPath = urlPath.split(":")[0];
+        }
+
         const basename = path.basename(urlPath);
+
+        // Handle query-string based extension (e.g., ?format=jpg&name=large)
+        const formatParam = urlObj.searchParams.get("format");
+        if (formatParam && !basename.includes(".")) {
+            return `${basename}.${formatParam}`;
+        }
+
         if (basename && basename.includes(".") && basename.length < 256) {
             return decodeURIComponent(basename);
         }
@@ -320,12 +334,6 @@ function formatEta(seconds: number): string {
     return `${Math.floor(seconds / 3600)}h ${Math.floor((seconds % 3600) / 60)}m`;
 }
 
-function formatBytes(bytes: number): string {
-    if (bytes < 1024) return `${bytes} B`;
-    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-    if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-    return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`;
-}
 
 export function isUnsupportedUrlError(errorMessage: string): boolean {
     return (

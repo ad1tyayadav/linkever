@@ -34,16 +34,53 @@ export const ERROR_MESSAGES: Record<string, string> = {
     NETWORK: "Could not reach the server. Please check your connection.",
 };
 
-// ─── Progress Steps ─────────────────────────────────────────────────────────
+// ─── Progress Steps (Fun & Engaging) ──────────────────────────────────────
+
+const FUN_STEPS = {
+    downloading: [
+        "Snatching media from the internet...",
+        "Stealing pixels for you... 🔥",
+        "Negotiating with the server...",
+        "Convincing the CDN to cooperate...",
+        "Downloading the goods... 🚀",
+        "Grabbing those bytes...",
+        "Making the download magic happen...",
+    ],
+    converting: [
+        "Mixing audio and video like a pro...",
+        "Welding formats together... ⚡",
+        "Perfecting the file...",
+        "Adding the finishing touches...",
+        "Merging the media sauce...",
+    ],
+    tagging: [
+        "Sprucing up the metadata... ✨",
+        "Adding the pretty thumbnails...",
+        "Making it look professional...",
+        "Polishing the file...",
+    ],
+    done: [
+        "Ta-da! Your media is ready! 🎉",
+        "Download complete! You're awesome! ⭐",
+        "All done! Enjoy your content! 🎊",
+    ],
+};
 
 export const PROGRESS_STEPS: Record<string, string> = {
-    queued: "Waiting in queue...",
-    downloading: "Downloading media...",
-    converting: "Converting format...",
-    tagging: "Embedding metadata...",
-    done: "Complete!",
-    error: "Something went wrong",
+    queued: "Warming up the engines...",
+    downloading: FUN_STEPS.downloading[Math.floor(Math.random() * FUN_STEPS.downloading.length)],
+    converting: FUN_STEPS.converting[Math.floor(Math.random() * FUN_STEPS.converting.length)],
+    tagging: FUN_STEPS.tagging[Math.floor(Math.random() * FUN_STEPS.tagging.length)],
+    done: FUN_STEPS.done[Math.floor(Math.random() * FUN_STEPS.done.length)],
+    error: "Oops! Something went sideways... 😬",
 };
+
+// Get a random fun step message
+export function getFunStepMessage(status: "downloading" | "converting" | "tagging" | "done", currentStep?: string): string {
+    const steps = FUN_STEPS[status];
+    if (!steps) return currentStep || PROGRESS_STEPS[status] || "Working on it...";
+    return steps[Math.floor(Math.random() * steps.length)];
+}
 
 // ─── Misc ───────────────────────────────────────────────────────────────────
 

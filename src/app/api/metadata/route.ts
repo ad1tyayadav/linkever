@@ -23,14 +23,7 @@ function getFormatsForType(type: MediaType): FormatOption[] {
 function getPlatformError(platform: Platform, url: string): { message: string; suggestion: string } {
     switch (platform) {
         case "instagram": {
-            const isPost = /\/p\//.test(url);
             const isStory = /\/stories\//.test(url);
-            if (isPost) {
-                return {
-                    message: "Instagram image posts require login to access. We can only download Instagram Reels and public videos.",
-                    suggestion: "Try pasting an Instagram Reel link instead, or use a post that contains a video.",
-                };
-            }
             if (isStory) {
                 return {
                     message: "Instagram Stories are private and expire after 24 hours. They can't be downloaded without authentication.",
@@ -57,6 +50,11 @@ function getPlatformError(platform: Platform, url: string): { message: string; s
             return {
                 message: "Facebook content is often private or restricted. We couldn't find downloadable media.",
                 suggestion: "Make sure the video is set to public visibility.",
+            };
+        case "reddit":
+            return {
+                message: "We couldn't fetch metadata for this Reddit post. It might be a text-only post or requires login.",
+                suggestion: "Make sure the post contains an image or video.",
             };
         default:
             return {

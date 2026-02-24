@@ -1,13 +1,33 @@
 @import "tailwindcss";
+@import "tw-animate-css";
+
+/* ─── Smooth Theme Transitions ──────────────────────────────────────────── */
+body,
+main,
+section,
+header,
+footer,
+div,
+span,
+p,
+a,
+button,
+input,
+select,
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  transition: background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease;
+}
 
 /* ─── Tailwind v4 Design Tokens ──────────────────────────────────────────── */
 
 @theme {
   --font-sans: "Inter", "Geist", sans-serif;
-  --color-primary: #000000;
   --color-spotify: #1DB954;
-  --color-success: #000000;
-  --color-error: #ff3333;
 
   --radius-xs: 4px;
   --radius-sm: 8px;
@@ -17,39 +37,102 @@
   --radius-full: 9999px;
 }
 
-/* ─── Light / Dark Theme Variables ───────────────────────────────────────── */
+/* ─── Light Theme (Default) ─────────────────────────────────────────────── */
 
-:root {
+:root,
+.light {
   --background: #ffffff;
-  --foreground: #000000;
+  --foreground: #09090b;
+  --card: #ffffff;
+  --card-foreground: #09090b;
+  --popover: #ffffff;
+  --popover-foreground: #09090b;
+  --primary: #18181b;
+  --primary-foreground: #fafafa;
+  --secondary: #f4f4f5;
+  --secondary-foreground: #18181b;
+  --muted: #f4f4f5;
+  --muted-foreground: #52525b;
+  --accent: #f4f4f5;
+  --accent-foreground: #18181b;
+  --destructive: #ef4444;
+  --destructive-foreground: #fafafa;
+  --border: #e4e4e7;
+  --input: #e4e4e7;
+  --ring: #18181b;
+  --radius: 0.5rem;
   --surface: #ffffff;
   --surface-hover: #fafafa;
-  --border: #f0f0f0;
-  --muted: #888888;
-  --ring: #000000;
-  --card: #ffffff;
-  --card-foreground: #000000;
-  --primary-foreground: #ffffff;
-  --destructive: #000000;
-  --destructive-foreground: #ffffff;
 }
+
+/* ─── Dark Theme ─────────────────────────────────────────────────────────── */
 
 .dark {
-  --background: #000000;
-  --foreground: #ffffff;
+  --background: #09090b;
+  --foreground: #fafafa;
+  --card: #09090b;
+  --card-foreground: #fafafa;
+  --popover: #09090b;
+  --popover-foreground: #fafafa;
+  --primary: #fafafa;
+  --primary-foreground: #18181b;
+  --secondary: #27272a;
+  --secondary-foreground: #fafafa;
+  --muted: #27272a;
+  --muted-foreground: #d4d4d8;
+  --accent: #27272a;
+  --accent-foreground: #fafafa;
+  --destructive: #7f1d1d;
+  --destructive-foreground: #fafafa;
+  --border: #27272a;
+  --input: #27272a;
+  --ring: #d4d4d8;
   --surface: #111111;
   --surface-hover: #1a1a1a;
-  --border: #333333;
-  --muted: #888888;
-  --ring: #ffffff;
-  --card: #0a0a0a;
-  --card-foreground: #ffffff;
-  --primary-foreground: #000000;
-  --destructive: #ffffff;
-  --destructive-foreground: #000000;
 }
 
-/* ─── Keyframes (can't be done in Tailwind) ──────────────────────────────── */
+/* ─── Tailwind Theme Integration ─────────────────────────────────────────── */
+
+@theme inline {
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --radius-2xl: calc(var(--radius) + 8px);
+  --radius-3xl: calc(var(--radius) + 12px);
+  --radius-4xl: calc(var(--radius) + 16px);
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+}
+
+@layer base {
+  * {
+    border-color: var(--border);
+  }
+
+  body {
+    background-color: var(--background);
+    color: var(--foreground);
+  }
+}
+
+/* ─── Marquee Animation ─────────────────────────────────────────────────── */
 
 @keyframes marquee {
   0% {

@@ -34,18 +34,18 @@ export function FormatSelector({ formats, mediaType, onSelect, selectedId, disab
                 >
                     <div className="flex items-center gap-2">
                         {mediaType === "file" || mediaType === "image" ? (
-                            <FileDown className="h-4 w-4 text-[var(--muted)]" />
+                            <FileDown className="h-4 w-4 text-[var(--muted-foreground)]" />
                         ) : mediaType === "audio" || mediaType === "album" ? (
-                            <Music className="h-4 w-4 text-[var(--muted)]" />
+                            <Music className="h-4 w-4 text-[var(--muted-foreground)]" />
                         ) : (
-                            <Video className="h-4 w-4 text-[var(--muted)]" />
+                            <Video className="h-4 w-4 text-[var(--muted-foreground)]" />
                         )}
                         <span className="font-medium">{selected.label}</span>
-                        <span className="text-[var(--muted)]">· {selected.quality}</span>
+                        <span className="text-[var(--muted-foreground)]">· {selected.quality}</span>
                     </div>
                     <ChevronDown
                         className={cn(
-                            "h-4 w-4 text-[var(--muted)]",
+                            "h-4 w-4 text-[var(--muted-foreground)]",
                             isOpen && "rotate-180"
                         )}
                     />
@@ -68,7 +68,7 @@ export function FormatSelector({ formats, mediaType, onSelect, selectedId, disab
                             >
                                 <div className="flex items-center gap-2">
                                     <span className="font-medium">{format.label}</span>
-                                    <span className="text-[var(--muted)]">{format.quality} · {format.format}</span>
+                                    <span className="text-[var(--muted-foreground)]">{format.quality} · {format.format}</span>
                                 </div>
                                 {format.id === selected.id && (
                                     <Check className="h-4 w-4 text-[var(--foreground)]" />

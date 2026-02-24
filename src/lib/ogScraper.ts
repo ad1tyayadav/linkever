@@ -9,6 +9,7 @@ import { detectPlatform } from "@/lib/platforms";
 
 const BROWSER_UA =
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36";
+const BOT_UA = "Mozilla/5.0 (compatible; Discordbot/2.0; +https://discordapp.com)";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -63,27 +64,46 @@ function parseOgTags(html: string): OgTags {
         /<meta[^>]+name=["']([^"']+)["'][^>]+content=["']([^"']*)["'][^>]*\/?>/gi,
         // content="yyy" name="twitter:xxx"
         /<meta[^>]+content=["']([^"']*)["'][^>]+name=["']([^"']+)["'][^>]*\/?>/gi,
+        // Also handle meta tags without trailing slash and with different quote styles
+        /<meta property=["']([^"']+)["'][^>]*content=["']([^"']*)["']/gi,
+        /<meta name=["']([^"']+)["'][^>]*content=["']([^"']*)["']/gi,
     ];
 
     for (let i = 0; i < patterns.length; i++) {
         const regex = patterns[i];
         let match: RegExpExecArray | null;
         while ((match = regex.exec(html)) !== null) {
-            if (i === 0 || i === 2) {
-                // property/name first, content second
-                const key = match[1].toLowerCase();
-                const value = match[2];
-                if ((key.startsWith("og:") || key.startsWith("twitter:")) && !tags[key]) {
-                    tags[key] = decodeHtmlEntities(value);
+            // Determine which group is the key and which is the value
+            // For patterns 0,1 (property): group 1 is key, group 2 is value
+            // For patterns 2,3 (name): group 1 is key, group 2 is value
+            // For patterns 4,5 (simpler): group 1 is key, group 2 is value
+            let key: string, value: string;
+
+            if (i <= 3) {
+                if (i === 0 || i === 2) {
+                    key = match[1].toLowerCase();
+                    value = match[2];
+                } else {
+                    value = match[1];
+                    key = match[2].toLowerCase();
                 }
             } else {
-                // content first, property/name second
-                const value = match[1];
-                const key = match[2].toLowerCase();
-                if ((key.startsWith("og:") || key.startsWith("twitter:")) && !tags[key]) {
-                    tags[key] = decodeHtmlEntities(value);
-                }
+                key = match[1].toLowerCase();
+                value = match[2];
             }
+
+            if ((key.startsWith("og:") || key.startsWith("twitter:")) && !tags[key]) {
+                tags[key] = decodeHtmlEntities(value);
+            }
+        }
+    }
+
+    // Additional fallback: try to find og:image with a more general regex
+    if (!tags["og:image"]) {
+        const imgMatch = html.match(/<meta[^>]+property=["']og:image["'][^>]+content=["']([^"']+)["']/i) ||
+            html.match(/<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:image["']/i);
+        if (imgMatch) {
+            tags["og:image"] = decodeHtmlEntities(imgMatch[1]);
         }
     }
 
@@ -124,12 +144,362 @@ function extractPinterestImage(html: string): string | null {
 
 // ─── Instagram oEmbed fallback (no auth needed) ─────────────────────────────
 
+// Instagram sharedData JSON extraction (no auth needed) ───────────────────
+// Instagram embeds the post data in a JSON blob in the HTML that we can parse
+
+interface InstagramSharedData {
+    entry_data?: {
+        PostPage?: Array<{
+            graphql?: {
+                shortcode_media?: {
+                    display_url?: string;
+                    display_resources?: Array<{
+                        src: string;
+                        config_width: number;
+                        config_height: number;
+                    }>;
+                    edge_sidecar_to_children?: {
+                        edges?: Array<{
+                            node: {
+                                display_url: string;
+                                display_resources?: Array<{
+                                    src: string;
+                                    config_width: number;
+                                    config_height: number;
+                                }>;
+                            };
+                        }>;
+                    };
+                    title?: string;
+                    edge_media_to_caption?: {
+                        edges?: Array<{
+                            node: { text: string };
+                        }>;
+                    };
+                    owner?: {
+                        username?: string;
+                    };
+                };
+            };
+        }>;
+    };
+}
+
+function parseInstagramFromHtml(html: string): OgScrapedMedia | null {
+    // 1. Modern approach: Try to extract window.__additionalDataLoaded
+    const additionalDataMatch = html.match(/window\.__additionalDataLoaded\s*\(\s*['"]feed['"]\s*,\s*({.+?})\s*\);/);
+    if (additionalDataMatch) {
+        try {
+            const data = JSON.parse(additionalDataMatch[1]);
+            return parseInstagramSharedData(data);
+        } catch {
+            // fallback
+        }
+    }
+
+    // 2. Legacy approach: Try to extract window._sharedData
+    const sharedDataMatch = html.match(/window\._sharedData\s*=\s*({.+?});/);
+    if (sharedDataMatch) {
+        try {
+            const sharedData: InstagramSharedData = JSON.parse(sharedDataMatch[1]);
+            return parseInstagramSharedData(sharedData);
+        } catch {
+            // fallback
+        }
+    }
+
+    return null;
+}
+
+function parseInstagramSharedData(data: InstagramSharedData): OgScrapedMedia | null {
+    const postPage = data.entry_data?.PostPage?.[0];
+    if (!postPage?.graphql?.shortcode_media) return null;
+
+    const media = postPage.graphql.shortcode_media;
+
+    // Get the highest resolution image
+    let mediaUrl: string | undefined;
+    let thumbnail: string = "";
+
+    // Check for carousel (multiple images/videos)
+    if (media.edge_sidecar_to_children?.edges?.length) {
+        const firstItem = media.edge_sidecar_to_children.edges[0]?.node;
+        if (firstItem?.display_resources) {
+            const best = getHighestRes(firstItem.display_resources);
+            mediaUrl = best?.src;
+            thumbnail = best?.src || firstItem.display_url || "";
+        } else {
+            mediaUrl = firstItem?.display_url;
+            thumbnail = firstItem?.display_url || "";
+        }
+    } else {
+        if (media.display_resources) {
+            const best = getHighestRes(media.display_resources);
+            mediaUrl = best?.src;
+            thumbnail = best?.src || media.display_url || "";
+        } else {
+            mediaUrl = media.display_url;
+            thumbnail = media.display_url || "";
+        }
+    }
+
+    if (!mediaUrl) return null;
+
+    const caption = media.edge_media_to_caption?.edges?.[0]?.node?.text || "";
+    const title = caption.slice(0, 100) || `Instagram post by @${media.owner?.username || "user"}`;
+
+    return {
+        mediaUrl,
+        title,
+        type: "image",
+        thumbnail,
+        siteName: "Instagram",
+    };
+}
+
+function getHighestRes(resources: Array<{ src: string; config_width: number; config_height: number }>): { src: string; config_width: number; config_height: number } | undefined {
+    if (!resources?.length) return undefined;
+    return resources.slice().sort((a, b) => b.config_width - a.config_width)[0];
+}
+
+// ─── Reddit-specific: extract image from embedded JSON ──────────────────────
+
+interface RedditGalleryItem {
+    media_id?: string;
+    id?: string;
+}
+
+interface RedditImageSource {
+    url: string;
+    width: number;
+    height: number;
+}
+
+interface RedditMediaMetadata {
+    p?: RedditImageSource[];
+    s?: RedditImageSource;
+    status?: string;
+}
+
+interface RedditGalleryData {
+    metadata?: {
+        items?: RedditGalleryItem[];
+    };
+}
+
+interface RedditPostData {
+    children?: Array<{
+        data?: {
+            url?: string;
+            preview?: {
+                images?: Array<{
+                    source?: { url: string; width: number; height: number };
+                    resolutions?: Array<{ url: string; width: number; height: number }>;
+                    id?: string;
+                }>;
+            };
+            media_metadata?: Record<string, RedditGalleryData>;
+            is_video?: boolean;
+            secure_media?: {
+                reddit_video?: { fallback_url?: string };
+            };
+            gallery_data?: RedditGalleryData;
+            title?: string;
+            author?: string;
+        };
+    }>;
+}
+
+function parseRedditFromHtml(html: string): OgScrapedMedia | null {
+    // Reddit embeds post data in window.__additionalDataLoaded or similar JSON
+    // Try to extract the JSON data from the HTML
+
+    // Method 1: Look for window.__additionalDataLoaded calls
+    const additionalDataMatch = html.match(/window\.__additionalDataLoaded\s*\(\s*['"]posts['"]\s*,\s*({.+?})\s*\);/);
+    if (additionalDataMatch) {
+        try {
+            const data = JSON.parse(additionalDataMatch[1]);
+            const result = extractRedditMedia(data);
+            if (result) return result;
+        } catch {
+            // fallback
+        }
+    }
+
+    // Method 2: Look for window.__r reddit_json data
+    const redditJsonMatch = html.match(/window\.__r\s*\s*=\s*({.+?});/);
+    if (redditJsonMatch) {
+        try {
+            const data = JSON.parse(redditJsonMatch[1]);
+            const result = extractRedditMedia(data);
+            if (result) return result;
+        } catch {
+            // fallback
+        }
+    }
+
+    // Method 3: Look for JSON in script tag with reddit data
+    const scriptMatch = html.match(/<script[^>]*>\s*window\.__reddit\s*=\s*({.+?});/);
+    if (scriptMatch) {
+        try {
+            const data = JSON.parse(scriptMatch[1]);
+            const result = extractRedditMedia(data);
+            if (result) return result;
+        } catch {
+            // fallback
+        }
+    }
+
+    // Method 4: Look for data-post JSON in script tags
+    const dataPostMatch = html.match(/data-post='(\{.+?\})'/);
+    if (dataPostMatch) {
+        try {
+            const data = JSON.parse(dataPostMatch[1]);
+            const result = extractRedditMedia(data);
+            if (result) return result;
+        } catch {
+            // fallback
+        }
+    }
+
+    // Method 5: Try to find any JSON that looks like reddit post data with preview images
+    const jsonPreviewMatch = html.match(/"preview"\s*:\s*\{"images"\s*:\s*\[\s*\{"source"\s*:\s*\{"url"\s*:\s*"([^"]+)"/);
+    if (jsonPreviewMatch) {
+        let mediaUrl = decodeHtmlEntities(jsonPreviewMatch[1]);
+        // Convert preview URL to full resolution (remove preview.redd.it and use i.redd.it)
+        mediaUrl = mediaUrl.replace(/preview\.redd\.it/i, 'i.redd.it');
+        return {
+            mediaUrl,
+            title: "Reddit Post",
+            type: "image",
+            thumbnail: mediaUrl,
+            siteName: "Reddit",
+        };
+    }
+
+    return null;
+}
+
+function extractRedditMedia(data: unknown): OgScrapedMedia | null {
+    // Handle different Reddit data structures
+    let postData: RedditPostData | undefined;
+
+    if (data && typeof data === 'object') {
+        // Try to find the post data in various locations
+        const d = data as Record<string, unknown>;
+        if (Array.isArray(d.children)) {
+            postData = data as RedditPostData;
+        } else if (d.data) {
+            postData = d.data as RedditPostData;
+        }
+    }
+
+    if (!postData?.children?.[0]?.data) return null;
+
+    const post = postData.children[0].data;
+
+    // Check for video first
+    if (post.is_video && post.secure_media?.reddit_video?.fallback_url) {
+        return {
+            mediaUrl: post.secure_media.reddit_video.fallback_url,
+            title: post.title || "Reddit Video",
+            type: "video",
+            thumbnail: "",
+            siteName: "Reddit",
+        };
+    }
+
+    // Check for gallery (multiple images)
+    if (post.gallery_data?.metadata?.items?.length) {
+        const items = post.gallery_data.metadata.items;
+        const firstItem = items[0];
+        const mediaId = firstItem.media_id || firstItem.id;
+        
+        if (mediaId && post.media_metadata?.[mediaId]) {
+            const mediaItem = post.media_metadata[mediaId] as RedditMediaMetadata | undefined;
+            // Get highest resolution from p (preview) or s (source)
+            const source = mediaItem?.p?.slice(-1)?.[0] || mediaItem?.s;
+            if (source?.url) {
+                let mediaUrl = source.url;
+                mediaUrl = mediaUrl.replace(/preview\.redd\.it/i, 'i.redd.it');
+                return {
+                    mediaUrl,
+                    title: post.title || "Reddit Gallery",
+                    type: "image",
+                    thumbnail: mediaUrl,
+                    siteName: "Reddit",
+                };
+            }
+        }
+    }
+
+    // Check for single image in preview
+    if (post.preview?.images?.[0]) {
+        const img = post.preview.images[0];
+        
+        // Try to get the highest resolution from resolutions array
+        if (img.resolutions?.length) {
+            const bestRes = img.resolutions.slice().sort((a, b) => b.width - a.width)[0];
+            if (bestRes?.url) {
+                let mediaUrl = decodeHtmlEntities(bestRes.url);
+                mediaUrl = mediaUrl.replace(/preview\.redd\.it/i, 'i.redd.it');
+                return {
+                    mediaUrl,
+                    title: post.title || "Reddit Post",
+                    type: "image",
+                    thumbnail: mediaUrl,
+                    siteName: "Reddit",
+                };
+            }
+        }
+        
+        // Fallback to source
+        if (img.source?.url) {
+            let mediaUrl = decodeHtmlEntities(img.source.url);
+            mediaUrl = mediaUrl.replace(/preview\.redd\.it/i, 'i.redd.it');
+            return {
+                mediaUrl,
+                title: post.title || "Reddit Post",
+                type: "image",
+                thumbnail: mediaUrl,
+                siteName: "Reddit",
+            };
+        }
+    }
+
+    // Direct URL fallback - if the post URL is directly an image
+    if (post.url && (post.url.includes('i.redd.it') || post.url.includes('preview.redd.it'))) {
+        let mediaUrl = post.url;
+        mediaUrl = mediaUrl.replace(/preview\.redd\.it/i, 'i.redd.it');
+        return {
+            mediaUrl,
+            title: post.title || "Reddit Image",
+            type: "image",
+            thumbnail: mediaUrl,
+            siteName: "Reddit",
+        };
+    }
+
+    return null;
+}
+
+// Instagram oEmbed fallback ───────────────────────────────────────────────
+
 async function fetchInstagramOembed(url: string): Promise<OgScrapedMedia | null> {
     try {
-        const oembedUrl = `https://graph.facebook.com/v18.0/instagram_oembed?url=${encodeURIComponent(url)}&access_token=`;
-        // Try the public (non-authenticated) oEmbed endpoint first
-        const publicUrl = `https://api.instagram.com/oembed/?url=${encodeURIComponent(url)}`;
-        const response = await fetch(publicUrl, {
+        // Extract shortcode from URL (e.g., DG_CukIyEFD from /p/DG_CukIyEFD/)
+        // Instagram oEmbed works better with just the shortcode
+        const shortcodeMatch = url.match(/instagram\.com\/(?:p|reel|tv)\/?([A-Za-z0-9_-]+)/i);
+
+        let oembedUrl: string;
+        if (shortcodeMatch) {
+            // Use just the shortcode for oEmbed
+            oembedUrl = `https://api.instagram.com/oembed/?url=https://www.instagram.com/${shortcodeMatch[1]}/`;
+        } else {
+            oembedUrl = `https://api.instagram.com/oembed/?url=${encodeURIComponent(url)}`;
+        }
+
+        const response = await fetch(oembedUrl, {
             headers: { "User-Agent": BROWSER_UA },
             signal: AbortSignal.timeout(10_000),
         });
@@ -165,11 +535,16 @@ async function fetchInstagramOembed(url: string): Promise<OgScrapedMedia | null>
  * Returns null if no usable media (og:image or og:video) is found.
  */
 export async function scrapeOgMedia(url: string): Promise<OgScrapedMedia | null> {
+    const isInstagram = /instagram\.com|instagr\.am/i.test(url);
+    const isTwitter = /twitter\.com|x\.com/i.test(url);
+    const isReddit = /reddit\.com|v\.redd\.it/i.test(url);
+    const ua = (isInstagram || isTwitter || isReddit) ? BOT_UA : BROWSER_UA;
+
     const response = await fetch(url, {
         method: "GET",
         redirect: "follow",
         signal: AbortSignal.timeout(15_000),
-        headers: { "User-Agent": BROWSER_UA },
+        headers: { "User-Agent": ua },
     });
 
     if (!response.ok) {
@@ -212,20 +587,34 @@ export async function scrapeOgMedia(url: string): Promise<OgScrapedMedia | null>
     if (!mediaUrl) {
         if (isPinterest) {
             // Use Pinterest-specific extraction for highest-res image
-            mediaUrl = extractPinterestImage(html) || og["og:image"] || og["twitter:image"] || null;
+            mediaUrl = extractPinterestImage(html) || og["og:image"] || og["twitter:image"] || og["twitter:image:src"] || null;
         } else {
-            mediaUrl = og["og:image"] || og["twitter:image"] || null;
+            mediaUrl = og["og:image"] || og["twitter:image"] || og["twitter:image:src"] || null;
         }
         type = "image";
     }
 
     if (!mediaUrl) {
-        // Instagram oEmbed fallback for posts that require login
+        // Instagram-specific extraction: try multiple approaches
         const isInstagram = /instagram\.com|instagr\.am/i.test(url);
         if (isInstagram) {
+            // Try oEmbed first - this is a public API that works without auth
             const igOembed = await fetchInstagramOembed(url);
             if (igOembed) return igOembed;
+
+            // Try sharedData extraction as fallback (gives highest quality image)
+            // This may not work on newer Instagram pages that use ServerJS
+            const igSharedData = parseInstagramFromHtml(html);
+            if (igSharedData) return igSharedData;
         }
+
+        // Reddit-specific extraction: try to get actual image from embedded JSON
+        const isReddit = /reddit\.com/i.test(url);
+        if (isReddit) {
+            const redditMedia = parseRedditFromHtml(html);
+            if (redditMedia) return redditMedia;
+        }
+
         return null; // No media found
     }
 

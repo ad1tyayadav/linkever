@@ -49,7 +49,7 @@ export function DownloadResult({ data, metadata, onNewDownload }: DownloadResult
                             <h3 className="text-sm font-medium leading-snug line-clamp-2 mb-1">
                                 {metadata?.title || data.filename}
                             </h3>
-                            <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-[var(--muted)]">
+                            <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-[var(--muted-foreground)]">
                                 {metadata?.author && metadata.author !== "Unknown" && (
                                     <span>{metadata.author}</span>
                                 )}
@@ -65,7 +65,8 @@ export function DownloadResult({ data, metadata, onNewDownload }: DownloadResult
                     <div className="flex gap-2 px-4 pb-4 pt-1">
                         <Button
                             size="sm"
-                            className="gap-2 flex-1 bg-[var(--foreground)] text-[var(--background)] hover:bg-[var(--foreground)]/90"
+                            variant="default"
+                            className="gap-2 flex-1"
                             onClick={() => downloadFile(data.downloadUrl, data.filename)}
                         >
                             <Download className="h-3.5 w-3.5" />

@@ -30,7 +30,7 @@ export function MetadataPreview({ metadata, isLoading }: MetadataPreviewProps) {
                                 />
                             ) : (
                                 <div className="flex h-full w-full items-center justify-center">
-                                    <ImageIcon className="h-6 w-6 text-[var(--muted)]" />
+                                    <ImageIcon className="h-6 w-6 text-[var(--muted-foreground)]" />
                                 </div>
                             )}
 
@@ -48,7 +48,7 @@ export function MetadataPreview({ metadata, isLoading }: MetadataPreviewProps) {
                                 {metadata.title}
                             </h3>
 
-                            <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-[var(--muted)]">
+                            <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-[var(--muted-foreground)]">
                                 {metadata.author && (
                                     <span className="flex items-center gap-1">
                                         <User className="h-3 w-3" />

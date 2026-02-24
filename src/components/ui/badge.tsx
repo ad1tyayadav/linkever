@@ -7,9 +7,9 @@ const badgeVariants = cva(
     {
         variants: {
             variant: {
-                default: "bg-[var(--color-primary)] text-white",
+                default: "bg-[var(--primary)] text-[var(--primary-foreground)]",
                 secondary: "bg-[var(--surface)] text-[var(--foreground)] border border-[var(--border)]",
-                success: "bg-[var(--color-success)]/15 text-[var(--color-success)] border border-[var(--color-success)]/20",
+                success: "bg-green-500/15 text-green-500 border border-green-500/20",
                 error: "bg-[var(--destructive)]/15 text-[var(--destructive)] border border-[var(--destructive)]/20",
                 spotify: "bg-[var(--color-spotify)]/15 text-[var(--color-spotify)] border border-[var(--color-spotify)]/20",
                 outline: "border border-[var(--border)] text-[var(--foreground)]",

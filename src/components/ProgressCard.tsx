@@ -31,7 +31,7 @@ export function ProgressCard({ progress, error }: ProgressCardProps) {
                         <div>
                             <p className="text-sm font-medium text-[var(--foreground)]">{error.message}</p>
                             {error.suggestion && (
-                                <p className="mt-1 text-xs text-[var(--muted)]">{error.suggestion}</p>
+                                <p className="mt-1 text-xs text-[var(--muted-foreground)]">{error.suggestion}</p>
                             )}
                         </div>
                     </CardContent>
@@ -59,7 +59,7 @@ export function ProgressCard({ progress, error }: ProgressCardProps) {
                             </div>
                         </div>
 
-                        <div className="text-xs text-[var(--muted)] font-mono">
+                        <div className="text-xs text-[var(--muted-foreground)] font-mono">
                             {progress.speed && <p>{progress.speed}</p>}
                         </div>
                     </div>
@@ -69,9 +69,9 @@ export function ProgressCard({ progress, error }: ProgressCardProps) {
 
                     {/* Percent */}
                     <div className="flex items-center justify-between mt-2">
-                        <p className="text-xs text-[var(--muted)] font-mono">{Math.round(progress.percent)}%</p>
+                        <p className="text-xs text-[var(--muted-foreground)] font-mono">{Math.round(progress.percent)}%</p>
                         {progress.totalTracks && progress.totalTracks > 1 && (
-                            <p className="text-xs text-[var(--muted)]">
+                            <p className="text-xs text-[var(--muted-foreground)]">
                                 Track {progress.currentTrack} of {progress.totalTracks}
                             </p>
                         )}

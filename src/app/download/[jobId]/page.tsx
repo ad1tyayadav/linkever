@@ -18,39 +18,11 @@ export default function DownloadPage() {
     const params = useParams();
     const router = useRouter();
     const jobId = params.jobId as string;
-    const { activeJob, addHistoryEntry, reset } = useAppStore();
+    const { activeJob, reset } = useAppStore();
     const autoDownloadTriggered = useRef(false);
 
     const { progress, isDone, doneData, error } = useProgress({
         jobId,
-        onDone: (data) => {
-            if (activeJob) {
-                addHistoryEntry({
-                    jobId,
-                    url: activeJob.url,
-                    platform: activeJob.platform,
-                    title: activeJob.title,
-                    type: activeJob.type,
-                    status: "completed",
-                    filename: data.filename,
-                    size: data.size,
-                    downloadedAt: new Date().toISOString(),
-                });
-            }
-        },
-        onError: () => {
-            if (activeJob) {
-                addHistoryEntry({
-                    jobId,
-                    url: activeJob.url,
-                    platform: activeJob.platform,
-                    title: activeJob.title,
-                    type: activeJob.type,
-                    status: "failed",
-                    downloadedAt: new Date().toISOString(),
-                });
-            }
-        },
     });
 
     // Auto-trigger file download when done

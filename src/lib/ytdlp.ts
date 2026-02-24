@@ -69,6 +69,7 @@ export async function fetchMetadata(url: string): Promise<MediaMetadata & { avai
             "--no-playlist",
             "--no-download",
             "--no-warnings",
+            "--user-agent", "Mozilla/5.0 (compatible; Discordbot/2.0; +https://discordapp.com)",
             url,
         ];
 
@@ -198,6 +199,7 @@ export async function download(
         const proc = spawn(YTDLP, args, { timeout: 600_000 }); // 10 min timeout
         let lastFilename = "";
         let stderr = "";
+        const lastPercentRef = { current: 0 };
 
         onProgress({
             status: "downloading",
@@ -210,7 +212,7 @@ export async function download(
         proc.stdout.on("data", (chunk: Buffer) => {
             const lines = chunk.toString().split("\n");
             for (const line of lines) {
-                const progress = parseProgressLine(line.trim());
+                const progress = parseProgressLine(line.trim(), lastPercentRef);
                 if (progress) {
                     onProgress(progress);
                     if (progress.filename) lastFilename = progress.filename;
@@ -222,22 +224,33 @@ export async function download(
             stderr += chunk.toString();
             const line = chunk.toString().trim();
 
-            // Detect merge/convert phase
+            // Detect merge/convert phase - only increase percent, never decrease
             if (line.includes("Merging formats")) {
+                lastPercentRef.current = Math.max(lastPercentRef.current, 90);
                 onProgress({
                     status: "converting",
-                    percent: 90,
+                    percent: lastPercentRef.current,
                     speed: "",
                     eta: "",
-                    step: "Merging audio and video...",
+                    step: "Mixing audio and video like a pro... ⚡",
+                });
+            } else if (line.includes("Extracting audio")) {
+                lastPercentRef.current = Math.max(lastPercentRef.current, 85);
+                onProgress({
+                    status: "converting",
+                    percent: lastPercentRef.current,
+                    speed: "",
+                    eta: "",
+                    step: "Pulling out the audio track...",
                 });
             } else if (line.includes("Embedding thumbnail") || line.includes("Adding metadata")) {
+                lastPercentRef.current = Math.max(lastPercentRef.current, 95);
                 onProgress({
                     status: "tagging",
-                    percent: 95,
+                    percent: lastPercentRef.current,
                     speed: "",
                     eta: "",
-                    step: "Embedding metadata...",
+                    step: "Sprucing up the metadata... ✨",
                 });
             }
         });
@@ -309,19 +322,24 @@ export async function download(
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
-function parseProgressLine(line: string): DownloadProgress | null {
+function parseProgressLine(line: string, lastPercentRef: { current: number } = { current: 0 }): DownloadProgress | null {
     // Match: [download]  45.2% of  125.88MiB at  4.52MiB/s ETA 00:15
     const progressMatch = line.match(
         /\[download\]\s+([\d.]+)%\s+of\s+~?([\d.]+\w+)\s+at\s+([\d.]+\w+\/s)\s+ETA\s+(\S+)/
     );
 
     if (progressMatch) {
+        const percent = parseFloat(progressMatch[1]);
+        // Only update if percent is higher (prevents going backwards)
+        if (percent > lastPercentRef.current) {
+            lastPercentRef.current = percent;
+        }
         return {
             status: "downloading",
-            percent: parseFloat(progressMatch[1]),
+            percent: lastPercentRef.current,
             speed: progressMatch[3],
             eta: progressMatch[4],
-            step: `Downloading... ${progressMatch[1]}%`,
+            step: `Snatching media from the internet... ${lastPercentRef.current}%`,
         };
     }
 
@@ -331,10 +349,10 @@ function parseProgressLine(line: string): DownloadProgress | null {
         const filename = path.basename(destMatch[1]);
         return {
             status: "downloading",
-            percent: 0,
+            percent: Math.max(lastPercentRef.current, 1),
             speed: "",
             eta: "",
-            step: "Preparing download...",
+            step: "Negotiating with the server...",
             filename,
         };
     }
@@ -342,43 +360,13 @@ function parseProgressLine(line: string): DownloadProgress | null {
     // Match: [download] 100% of 125.88MiB
     const doneMatch = line.match(/\[download\]\s+100%\s+of/);
     if (doneMatch) {
+        lastPercentRef.current = Math.max(lastPercentRef.current, 85);
         return {
             status: "downloading",
-            percent: 100,
+            percent: lastPercentRef.current,
             speed: "",
             eta: "",
-            step: "Download complete, processing...",
-        };
-    }
-
-    // Match: [ExtractAudio] / [Merger] messages
-    if (line.includes("[ExtractAudio]")) {
-        return {
-            status: "converting",
-            percent: 88,
-            speed: "",
-            eta: "",
-            step: "Extracting audio...",
-        };
-    }
-
-    if (line.includes("[Merger]")) {
-        return {
-            status: "converting",
-            percent: 90,
-            speed: "",
-            eta: "",
-            step: "Merging audio and video...",
-        };
-    }
-
-    if (line.includes("[EmbedThumbnail]") || line.includes("[Metadata]")) {
-        return {
-            status: "tagging",
-            percent: 95,
-            speed: "",
-            eta: "",
-            step: "Embedding metadata...",
+            step: "Got it! Now processing the file...",
         };
     }
 

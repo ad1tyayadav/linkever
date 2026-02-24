@@ -14,13 +14,13 @@ import { TrustBadges } from "@/components/TrustBadges";
 import { ProgressCard } from "@/components/ProgressCard";
 import { DownloadResult } from "@/components/DownloadResult";
 import { Footer } from "@/components/Footer";
+import { PlatformTyping } from "@/components/PlatformTyping";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { ChevronRight, Github } from "lucide-react";
 import { detectPlatform, isSpotifyUrl } from "@/lib/platforms";
 import { useMetadata, useDownload } from "@/hooks/useDownload";
 import { useProgress } from "@/hooks/useProgress";
-import { useAppStore } from "@/lib/store";
 import { triggerBrowserDownload } from "@/lib/utils";
 import type { PlatformInfo, MediaMetadata, FormatOption, DoneEvent, MetadataResponse } from "@/types";
 
@@ -63,8 +63,6 @@ function extractApiError(error: unknown): { message: string; suggestion?: string
 
 
 export default function HomePage() {
-    const { addHistoryEntry } = useAppStore();
-
     const [platform, setPlatform] = useState<PlatformInfo | null>(null);
     const [metadata, setMetadata] = useState<MediaMetadata | null>(null);
     const [formats, setFormats] = useState<FormatOption[]>([]);
@@ -81,30 +79,6 @@ export default function HomePage() {
 
     const { progress, isDone, doneData, error: progressError } = useProgress({
         jobId: activeJobId,
-        onDone: (data: DoneEvent) => {
-            addHistoryEntry({
-                jobId: activeJobId!,
-                url,
-                platform: platform?.id || "unknown",
-                title: jobTitle || metadata?.title || "Download",
-                type: metadata?.type || "video",
-                status: "completed",
-                filename: data.filename,
-                size: data.size,
-                downloadedAt: new Date().toISOString(),
-            });
-        },
-        onError: () => {
-            addHistoryEntry({
-                jobId: activeJobId!,
-                url,
-                platform: platform?.id || "unknown",
-                title: jobTitle || metadata?.title || "Download",
-                type: metadata?.type || "video",
-                status: "failed",
-                downloadedAt: new Date().toISOString(),
-            });
-        },
     });
 
     useEffect(() => {
@@ -130,8 +104,20 @@ export default function HomePage() {
                 onSuccess: (data: MetadataResponse) => {
                     setMetadata(data);
                     setFormats(data.formats || []);
-                    setSelectedFormat(null);
-                    setFormatSelectorDisabled(true);
+
+                    // Only show quality selector for YouTube and Spotify
+                    const isYouTubeOrSpotify = detected.id === 'youtube' || isSpotifyUrl(inputUrl);
+                    const hasFormats = data.formats && data.formats.length > 0;
+
+                    if (isYouTubeOrSpotify && hasFormats) {
+                        // Auto-select best quality for YouTube/Spotify
+                        const defaultFormat = data.formats.find(f => f.isDefault) || data.formats[0];
+                        setSelectedFormat(defaultFormat);
+                        setFormatSelectorDisabled(false);
+                    } else {
+                        setSelectedFormat(null);
+                        setFormatSelectorDisabled(true);
+                    }
                 },
             });
         },
@@ -160,9 +146,7 @@ export default function HomePage() {
         setSelectedFormat(format);
     }, []);
 
-    const handleStartDownload = useCallback(() => {
-        setFormatSelectorDisabled(false);
-    }, []);
+    // Removed handleStartDownload - Download button shows immediately now
 
     const handleNewDownload = useCallback(() => {
         setActiveJobId(null);
@@ -188,59 +172,41 @@ export default function HomePage() {
         <div className="flex min-h-screen flex-col">
             <Header />
 
-            <main className="flex flex-1 flex-col items-center justify-center px-4 pt-32 pb-20">
+            <main className="flex flex-1 flex-col items-center justify-center px-4 pt-32 pb-20 relative overflow-hidden">
+                {/* Gradient Background */}
+                <div className="absolute inset-0 -z-10 opacity-60" aria-hidden="true">
+                    <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-purple-500/20 via-transparent to-transparent" />
+                    <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_bottom_right,_var(--tw-gradient-stops))] from-blue-500/20 via-transparent to-transparent" />
+                    <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_left,_var(--tw-gradient-stops))] from-pink-500/15 via-transparent to-transparent" />
+                </div>
                 <div className="w-full max-w-2xl space-y-12">
                     {/* Hero Section */}
                     <div className="text-center space-y-8">
                         {/* Pill Badge */}
                         <div className="flex justify-center">
-                            <div className="flex items-center gap-2 rounded-full border border-[var(--border)] px-3 py-1 bg-white text-[13px] font-medium text-[var(--foreground)] hover:bg-[var(--surface-hover)] transition-colors cursor-default">
-                                <span className="flex items-center justify-center w-5 h-5 rounded-full bg-linear-to-tr from-pink-500 via-purple-500 to-blue-500 p-0.5">
-                                    <span className="w-full h-full rounded-full bg-white flex items-center justify-center text-[10px]">✨</span>
-                                </span>
-                                <span>Introducing LinkEver</span>
-                                <ChevronRight className="h-3 w-3 text-[var(--muted)]" />
+                            <div className="inline-flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-xs font-medium text-[var(--muted-foreground)] border border-[var(--border)] hover:border-[var(--foreground)]/30 transition-colors cursor-default">
+                                <span className="text-[13px]">Introducing LinkEver</span>
                             </div>
                         </div>
 
                         {/* Title & Subtitle */}
                         <div className="space-y-6">
-                            <h1 className="text-5xl md:text-7xl font-bold tracking-tight text-black leading-[1.1]">
-                                Download media<br />
-                                from anywhere in <span className="italic font-normal">record</span> time
+                            <h1 className="text-5xl md:text-5xl font-bold tracking-tight text-[var(--foreground)] leading-[1.1]">
+                                Paste link and download media from <PlatformTyping />
                             </h1>
-                            <p className="text-lg text-[var(--muted)] max-w-xl mx-auto leading-relaxed">
+                            <p className="text-lg text-[var(--muted-foreground)] max-w-xl mx-auto leading-relaxed">
                                 LinkEver is the simplest way to save your favorite videos, music, and images from <span className="font-semibold text-[var(--foreground)]">YouTube</span>, <span className="font-semibold text-[var(--foreground)]">Spotify</span>, <span className="font-semibold text-[var(--foreground)]">Instagram</span>, <span className="font-semibold text-[var(--foreground)]">TikTok</span>, and <span className="font-semibold text-[var(--foreground)]">100+ platforms</span>. High quality, no limits, and completely free.
                             </p>
                         </div>
 
-                        {/* Hero CTAs */}
-                        {!metadata && !isDownloading && (
-                            <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
-                                <Button
-                                    className="h-12 px-8 rounded-xl bg-black text-white hover:bg-black/90 text-base font-medium shadow-xl shadow-black/10 transition-all hover:-translate-y-0.5"
-                                    onClick={() => document.querySelector('input')?.focus()}
-                                >
-                                    Start Downloading
-                                    <ChevronRight className="h-4 w-4 ml-1" />
-                                </Button>
-                                <Button
-                                    variant="outline"
-                                    className="h-12 px-8 rounded-xl border-[var(--border)] bg-white text-black hover:bg-[var(--surface-hover)] text-base font-medium transition-all"
-                                    onClick={() => window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' })}
-                                >
-                                    Supported Platforms
-                                    <ChevronRight className="h-4 w-4 ml-1 opacity-50" />
-                                </Button>
-                            </div>
-                        )}
+
                     </div>
 
                     {/* URL Input */}
                     <UrlInput
                         onUrlSubmit={handleUrlSubmit}
                         isLoading={metadataMutation.isPending}
-                        disabled={isDownloading}
+                        disabled={metadataMutation.isPending}
                     />
 
                     {/* Platform Detection */}
@@ -291,36 +257,24 @@ export default function HomePage() {
                         />
                     )}
 
-                    {/* CTA Button */}
+                    {/* Download Button - shows immediately after metadata loads */}
                     {showCta && (
-                        <div className="flex flex-col gap-3">
-                            {!formatSelectorDisabled ? (
-                                <div className="flex justify-center gap-2">
-                                    <Button
-                                        size="lg"
-                                        onClick={handleDownload}
-                                        disabled={downloadMutation.isPending}
-                                        className="gap-2 bg-[var(--foreground)] text-[var(--background)] hover:bg-[var(--foreground)]/90"
-                                    >
-                                        {downloadMutation.isPending ? (
-                                            <Download className="h-4 w-4" />
-                                        ) : cta.showIcon ? (
-                                            cta.icon
-                                        ) : null}
-                                        {downloadMutation.isPending ? "Starting..." : cta.label}
-                                    </Button>
-                                </div>
-                            ) : (
-                                <div className="flex justify-center">
-                                    <Button
-                                        size="lg"
-                                        onClick={handleStartDownload}
-                                        className="bg-[var(--foreground)] text-[var(--background)] hover:bg-[var(--foreground)]/90"
-                                    >
-                                        Continue
-                                    </Button>
-                                </div>
-                            )}
+                        <div className="flex justify-center">
+                            <Button
+                                size="lg"
+                                onClick={handleDownload}
+                                disabled={downloadMutation.isPending}
+                                className="gap-2 bg-[var(--foreground)] text-[var(--background)] hover:bg-[var(--foreground)]/90 min-w-[180px]"
+                            >
+                                {downloadMutation.isPending ? (
+                                    <Download className="h-4 w-4 animate-pulse" />
+                                ) : cta.showIcon ? (
+                                    cta.icon
+                                ) : (
+                                    <Download className="h-4 w-4" />
+                                )}
+                                {downloadMutation.isPending ? "Starting..." : cta.label}
+                            </Button>
                         </div>
                     )}
 
@@ -336,7 +290,11 @@ export default function HomePage() {
                     )}
 
                     {/* Platform Marquee */}
-                    {!platform && !isDownloading && <PlatformMarquee />}
+                    {!platform && !isDownloading && (
+                        <div className="bg-[var(--surface)] rounded-2xl">
+                            <PlatformMarquee />
+                        </div>
+                    )}
 
                     {/* Trust Badges */}
                     {!isDownloading && <TrustBadges />}
