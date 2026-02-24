@@ -176,6 +176,7 @@ def download_audio(yt_url: str, output_path: str) -> int:
         "--audio-format", "mp3",
         "--audio-quality", "0",
         "--embed-thumbnail",
+        "--user-agent", "Mozilla/5.0 (compatible; Discordbot/2.0; +https://discordapp.com)",
         "--no-check-certificates",
         "--retries", "3",
         "--newline",
@@ -192,6 +193,9 @@ def download_audio(yt_url: str, output_path: str) -> int:
     )
     
     for line in process.stdout:
+        # Emit all lines to stderr so Node.js can see them in case of failure
+        print(line.strip(), file=sys.stderr)
+        
         # Parse progress from yt-dlp output
         if "[download]" in line and "%" in line:
             match = re.search(r'(\d+\.?\d*)%', line)

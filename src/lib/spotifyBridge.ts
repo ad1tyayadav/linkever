@@ -189,7 +189,13 @@ function parseBridgeError(output: string): string {
     if (output.includes("ffmpeg")) {
         return "FFmpeg is required. Please install FFmpeg and try again.";
     }
-    return "Failed to download from Spotify. Please try again.";
+    if (output.includes("403") || output.includes("Forbidden") || output.includes("blocked") || output.includes("429")) {
+        return "Access denied by platform. The server's IP might be blocked.";
+    }
+    if (output.includes("Sign in to confirm your age")) {
+        return "Content is age-restricted and cannot be downloaded by the server.";
+    }
+    return output.slice(0, 150) || "Failed to download from Spotify. Please try again.";
 }
 
 export async function isSpotifyBridgeAvailable(): Promise<boolean> {
