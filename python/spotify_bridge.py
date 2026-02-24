@@ -168,8 +168,22 @@ def download_audio(yt_url: str, output_path: str) -> int:
     # Ensure output directory exists
     os.makedirs(os.path.dirname(output_path), exist_ok=True)
     
+    # Check for deno installation
+    deno_path = None
+    for p in ["/usr/local/bin/deno", "/root/.deno/bin/deno", "/app/bin/deno"]:
+        if os.path.exists(p):
+            deno_path = p
+            break
+    
+    # Try to find yt-dlp with full path
+    yt_dlp_path = "yt-dlp"
+    if os.path.exists("/usr/local/bin/yt-dlp"):
+        yt_dlp_path = "/usr/local/bin/yt-dlp"
+    elif os.path.exists("/app/yt-dlp"):
+        yt_dlp_path = "/app/yt-dlp"
+    
     cmd = [
-        "yt-dlp",
+        yt_dlp_path,
         yt_url,
         "--no-playlist",
         "--format", "bestaudio/best",
@@ -182,9 +196,11 @@ def download_audio(yt_url: str, output_path: str) -> int:
         "--add-header", "Referer:https://www.google.com/",
         "--no-check-certificates",
         "--geo-bypass",
+        # Improved player clients for better bypass
         "--extractor-args", "youtube:player_client=android,web;ios:player_client=apple_tv",
-        "--js-runtimes", "nodejs,deno",
-        "--retries", "3",
+        "--no-check-certificates",
+        "--retries", "5",
+        "--fragment-retries", "10",
         "--newline",
         "--progress",
         "--output", output_path
@@ -197,10 +213,11 @@ def download_audio(yt_url: str, output_path: str) -> int:
     elif os.path.exists("cookies.txt"):
         cmd.extend(["--cookies", "cookies.txt"])
     
-    # Use proxy if available
+    # Use proxy if available (REQUIRED for Render/deployed servers)
     proxy_url = os.environ.get("PROXY_URL")
     if proxy_url:
         cmd.extend(["--proxy", proxy_url])
+        print(f"Using proxy: {proxy_url}", file=sys.stderr)
     
     process = subprocess.Popen(
         cmd,
