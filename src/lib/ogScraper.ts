@@ -1,3 +1,4 @@
+import type { MediaMetadata, MediaType } from "@/types";
 import { detectPlatform } from "@/lib/platforms";
 import axios from "axios";
 import { URL } from "url";
