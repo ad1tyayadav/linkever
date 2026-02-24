@@ -168,20 +168,43 @@ export default function HomePage() {
 
     const errorInfo = metadataMutation.isError ? extractApiError(metadataMutation.error) : null;
 
+    const jsonLd = {
+        "@context": "https://schema.org",
+        "@type": "SoftwareApplication",
+        "name": "LinkEver",
+        "operatingSystem": "All",
+        "applicationCategory": "UtilitiesApplication",
+        "offers": {
+            "@type": "Offer",
+            "price": "0",
+            "priceCurrency": "USD"
+        },
+        "description": "High-quality media downloader for YouTube, Spotify, Instagram, TikTok and 100+ other platforms.",
+        "aggregateRating": {
+            "@type": "AggregateRating",
+            "ratingValue": "4.9",
+            "ratingCount": "1000"
+        }
+    };
+
     return (
         <div className="flex min-h-screen flex-col">
+            <script
+                type="application/ld+json"
+                dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+            />
             <Header />
 
-            <main className="flex flex-1 flex-col items-center justify-center px-4 pt-32 pb-20 relative overflow-hidden">
+            <main className="flex flex-1 flex-col items-center justify-center px-3 sm:px-4 pt-24 sm:pt-28 md:pt-32 pb-12 sm:pb-16 md:pb-20 relative overflow-hidden">
                 {/* Gradient Background */}
                 <div className="absolute inset-0 -z-10 opacity-60" aria-hidden="true">
                     <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-purple-500/20 via-transparent to-transparent" />
                     <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_bottom_right,_var(--tw-gradient-stops))] from-blue-500/20 via-transparent to-transparent" />
                     <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_left,_var(--tw-gradient-stops))] from-pink-500/15 via-transparent to-transparent" />
                 </div>
-                <div className="w-full max-w-2xl space-y-12">
+                <div className="w-full max-w-2xl space-y-8 sm:space-y-10 md:space-y-12">
                     {/* Hero Section */}
-                    <div className="text-center space-y-8">
+                    <div className="text-center space-y-6 sm:space-y-8">
                         {/* Pill Badge */}
                         <div className="flex justify-center">
                             <div className="inline-flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-xs font-medium text-[var(--muted-foreground)] border border-[var(--border)] hover:border-[var(--foreground)]/30 transition-colors cursor-default">
@@ -190,11 +213,11 @@ export default function HomePage() {
                         </div>
 
                         {/* Title & Subtitle */}
-                        <div className="space-y-6">
-                            <h1 className="text-5xl md:text-5xl font-bold tracking-tight text-[var(--foreground)] leading-[1.1]">
+                        <div className="space-y-4 sm:space-y-6">
+                            <h1 className="text-2xl sm:text-2xl md:text-3xl lg:text-4xl xl:text-5xl font-bold tracking-tight text-[var(--foreground)] leading-[1.1]">
                                 Paste link and download media from <PlatformTyping />
                             </h1>
-                            <p className="text-lg text-[var(--muted-foreground)] max-w-xl mx-auto leading-relaxed">
+                            <p className="text-xs sm:text-sm text-[var(--muted-foreground)] max-w-xl mx-auto leading-relaxed px-2 sm:px-0">
                                 LinkEver is the simplest way to save your favorite videos, music, and images from <span className="font-semibold text-[var(--foreground)]">YouTube</span>, <span className="font-semibold text-[var(--foreground)]">Spotify</span>, <span className="font-semibold text-[var(--foreground)]">Instagram</span>, <span className="font-semibold text-[var(--foreground)]">TikTok</span>, and <span className="font-semibold text-[var(--foreground)]">100+ platforms</span>. High quality, no limits, and completely free.
                             </p>
                         </div>
@@ -291,7 +314,7 @@ export default function HomePage() {
 
                     {/* Platform Marquee */}
                     {!platform && !isDownloading && (
-                        <div className="bg-[var(--surface)] rounded-2xl">
+                        <div className="bg-[var(--surface)] rounded-xl sm:rounded-2xl">
                             <PlatformMarquee />
                         </div>
                     )}

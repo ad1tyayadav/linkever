@@ -15,7 +15,7 @@ export function PlatformDetector({ platform, url }: PlatformDetectorProps) {
     const isSpotify = isSpotifyUrl(url);
 
     return (
-        <div className="flex items-center justify-center gap-2">
+        <div className="flex flex-wrap items-center justify-center gap-1.5 sm:gap-2">
             {/* Platform badge */}
             <Badge
                 variant="secondary"

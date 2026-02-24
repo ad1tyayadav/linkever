@@ -21,7 +21,7 @@ export function MetadataPreview({ metadata, isLoading }: MetadataPreviewProps) {
                 <CardContent className="p-0">
                     <div className="flex">
                         {/* Thumbnail */}
-                        <div className="relative w-28 sm:w-32 shrink-0 aspect-video bg-[var(--surface)] overflow-hidden">
+                        <div className="relative w-20 sm:w-28 md:w-32 shrink-0 aspect-video bg-[var(--surface)] overflow-hidden">
                             {metadata.thumbnail ? (
                                 <img
                                     src={metadata.thumbnail}
@@ -44,11 +44,11 @@ export function MetadataPreview({ metadata, isLoading }: MetadataPreviewProps) {
 
                         {/* Info */}
                         <div className="flex flex-col justify-center gap-1.5 p-3 min-w-0 flex-1">
-                            <h3 className="text-sm font-medium leading-snug line-clamp-2">
+                            <h3 className="text-xs sm:text-sm font-medium leading-snug line-clamp-2">
                                 {metadata.title}
                             </h3>
 
-                            <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-[var(--muted-foreground)]">
+                            <div className="flex flex-wrap items-center gap-x-1.5 sm:gap-x-2 gap-y-0.5 sm:gap-y-1 text-[10px] sm:text-xs text-[var(--muted-foreground)]">
                                 {metadata.author && (
                                     <span className="flex items-center gap-1">
                                         <User className="h-3 w-3" />

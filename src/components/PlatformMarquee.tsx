@@ -135,19 +135,19 @@ export function PlatformMarquee() {
     const items = [...PLATFORMS, ...PLATFORMS];
 
     return (
-        <div className="w-full max-w-3xl mx-auto overflow-hidden py-6" aria-hidden="true">
+        <div className="w-full max-w-3xl mx-auto overflow-hidden py-4 sm:py-6" aria-hidden="true">
             <div className="flex will-change-transform" style={{ animation: "marquee 25s linear infinite" }}>
                 {items.map((platform, i) => {
                     const Icon = PLATFORM_ICONS[platform.id];
                     return (
                         <div
                             key={`${platform.id}-${i}`}
-                            className="flex shrink-0 items-center gap-2 px-5"
+                            className="flex shrink-0 items-center gap-1.5 sm:gap-2 px-3 sm:px-5"
                         >
-                            <span className="h-4 w-4 flex items-center justify-center" style={{ color: platform.color }}>
+                            <span className="h-3.5 w-3.5 sm:h-4 sm:w-4 flex items-center justify-center" style={{ color: platform.color }}>
                                 <Icon className="h-full w-full" />
                             </span>
-                            <span className="whitespace-nowrap text-sm text-[var(--muted-foreground)] font-medium">
+                            <span className="whitespace-nowrap text-xs sm:text-sm text-[var(--muted-foreground)] font-medium">
                                 {platform.name}
                             </span>
                         </div>

@@ -10,7 +10,7 @@ const BADGES = [
 
 export function TrustBadges() {
     return (
-        <div className="flex flex-wrap items-center justify-center gap-x-8 gap-y-4 text-[13px] font-medium text-[var(--muted-foreground)]">
+        <div className="flex flex-wrap items-center justify-center gap-x-4 sm:gap-x-8 gap-y-2 sm:gap-y-4 text-[12px] sm:text-[13px] font-medium text-[var(--muted-foreground)]">
             {BADGES.map(({ icon: Icon, label }) => (
                 <div key={label} className="flex items-center gap-2 group cursor-default">
                     <div className="flex h-5 w-5 items-center justify-center rounded-full bg-[var(--surface-hover)] group-hover:bg-[var(--foreground)]/5 transition-colors">

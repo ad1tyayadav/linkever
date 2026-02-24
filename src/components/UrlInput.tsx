@@ -75,7 +75,7 @@ export function UrlInput({ onUrlSubmit, isLoading = false, disabled = false }: U
             {/* Input Container */}
             <div
                 className={cn(
-                    "relative flex items-center gap-3 rounded-2xl border border-[var(--border)] px-6 py-4 bg-[var(--surface)] shadow-2xl shadow-black/[0.03] dark:shadow-none transition-all",
+                    "relative flex items-center gap-2 sm:gap-3 rounded-xl sm:rounded-2xl border border-[var(--border)] px-3 sm:px-6 py-3 sm:py-4 bg-[var(--surface)] shadow-2xl shadow-black/[0.03] dark:shadow-none transition-all",
                     disabled ? "opacity-50 pointer-events-none" : "hover:border-[var(--foreground)]/20 focus-within:border-[var(--foreground)]/40 focus-within:shadow-[var(--foreground)]/[0.05]"
                 )}
             >
@@ -101,8 +101,8 @@ export function UrlInput({ onUrlSubmit, isLoading = false, disabled = false }: U
                     onChange={(e) => handleChange(e.target.value)}
                     onPaste={handlePaste}
                     onKeyDown={handleKeyDown}
-                    placeholder="Paste a link to get started..."
-                    className="flex-1 bg-transparent text-base text-[var(--foreground)] placeholder:text-[var(--muted-foreground)] focus:outline-none"
+                    placeholder="Paste a link..."
+                    className="flex-1 bg-transparent text-sm sm:text-base text-[var(--foreground)] placeholder:text-[var(--muted-foreground)] focus:outline-none"
                     disabled={isLoading || disabled}
                     aria-label="Paste a URL to download media"
                     autoComplete="off"
@@ -140,7 +140,7 @@ export function UrlInput({ onUrlSubmit, isLoading = false, disabled = false }: U
 
             {/* Keyboard hint */}
             {!disabled && (
-                <p className="mt-4 text-center text-[13px] text-[var(--muted-foreground)] font-medium">
+                <p className="mt-3 sm:mt-4 text-center text-[12px] sm:text-[13px] text-[var(--muted-foreground)] font-medium hidden sm:block">
                     Press <kbd className="rounded-md bg-[var(--surface)] px-2 py-0.5 text-[11px] font-bold text-[var(--foreground)] border border-[var(--border)] shadow-sm">⌘ V</kbd> to paste
                 </p>
             )}
