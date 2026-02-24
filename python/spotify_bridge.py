@@ -144,13 +144,14 @@ def find_youtube_music_url(artist: str, title: str, duration_sec: Optional[int] 
                 if r.get('duration_seconds'):
                     if abs(r['duration_seconds'] - duration_sec) <= 8:
                         video_id = r['videoId']
-                        return f"https://music.youtube.com/watch?v={video_id}", "high"
+                        # Use www.youtube.com instead of music.youtube.com (sometimes less restricted)
+                        return f"https://www.youtube.com/watch?v={video_id}", "high"
         
         # Take first result if no duration match or no duration available
         if results:
             video_id = results[0]['videoId']
             confidence = "medium" if duration_sec else "low"
-            return f"https://music.youtube.com/watch?v={video_id}", confidence
+            return f"https://www.youtube.com/watch?v={video_id}", confidence
         
         # Fallback to regular YouTube search
         return f"ytsearch1:{artist} - {title}", "low"
@@ -177,6 +178,8 @@ def download_audio(yt_url: str, output_path: str) -> int:
         "--audio-quality", "0",
         "--embed-thumbnail",
         "--user-agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+        "--add-header", "Accept-Language:en-US,en;q=0.9",
+        "--add-header", "Referer:https://www.google.com/",
         "--no-check-certificates",
         "--geo-bypass",
         "--extractor-args", "youtube:player_client=android,web;ios:player_client=apple_tv",
@@ -185,6 +188,13 @@ def download_audio(yt_url: str, output_path: str) -> int:
         "--progress",
         "--output", output_path
     ]
+    
+    # Use cookies if available in the app root
+    cookies_path = "/app/cookies.txt"
+    if os.path.exists(cookies_path):
+        cmd.extend(["--cookies", cookies_path])
+    elif os.path.exists("cookies.txt"):
+        cmd.extend(["--cookies", "cookies.txt"])
     
     process = subprocess.Popen(
         cmd,
