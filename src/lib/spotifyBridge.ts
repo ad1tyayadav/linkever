@@ -4,7 +4,7 @@ import os from "os";
 import fs from "fs/promises";
 import type { DownloadProgress, ProgressCallback } from "@/lib/ytdlp";
 
-const PYTHON_CMD = process.platform === "win32" ? "py" : "python3";
+const PYTHON_CMD = process.env.PYTHON_PATH || (process.platform === "win32" ? "py" : "python3");
 const DOWNLOAD_DIR = path.join(os.tmpdir(), "linkever-downloads");
 
 interface SpotifyMetadata {
@@ -39,7 +39,7 @@ export async function spotifyBridgeDownload(
     await fs.mkdir(dir, { recursive: true });
 
     const scriptPath = path.join(process.cwd(), "python", "spotify_bridge.py");
-    
+
     const args = [scriptPath, spotifyUrl, dir];
 
     console.log(`[linkever] Spotify bridge: ${PYTHON_CMD} ${args.join(" ")}`);
@@ -67,20 +67,20 @@ export async function spotifyBridgeDownload(
         proc.stdout.on("data", (chunk: Buffer) => {
             const text = chunk.toString();
             const lines = text.trim().split("\n");
-            
+
             for (const line of lines) {
                 if (!line.trim()) continue;
-                
+
                 try {
                     const data: BridgeProgress = JSON.parse(line);
-                    
+
                     let status: DownloadProgress["status"] = "downloading";
                     if (data.status === "error") status = "error";
                     if (data.status === "complete") status = "done";
-                    
+
                     const step = data.step || "Processing...";
                     const percent = Math.min(100, Math.max(0, data.percent || 0));
-                    
+
                     onProgress({
                         status,
                         percent,
@@ -88,7 +88,7 @@ export async function spotifyBridgeDownload(
                         eta: "",
                         step,
                     });
-                    
+
                     if (status === "done" || data.filepath) {
                         // Will handle in close
                     }
@@ -164,7 +164,11 @@ export async function spotifyBridgeDownload(
         });
 
         proc.on("error", (err) => {
-            reject(new Error(`Failed to start Python bridge: ${err.message}`));
+            const isNoent = (err as any).code === "ENOENT";
+            const msg = isNoent
+                ? `Python not found at "${PYTHON_CMD}". Please check PYTHON_PATH in .env or install Python.`
+                : `Failed to start Python bridge: ${err.message}`;
+            reject(new Error(msg));
         });
     });
 }
@@ -190,7 +194,7 @@ function parseBridgeError(output: string): string {
 
 export async function isSpotifyBridgeAvailable(): Promise<boolean> {
     const scriptPath = path.join(process.cwd(), "python", "spotify_bridge.py");
-    
+
     try {
         await fs.access(scriptPath);
         return true;

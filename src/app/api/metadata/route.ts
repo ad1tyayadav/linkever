@@ -56,11 +56,18 @@ function getPlatformError(platform: Platform, url: string): { message: string; s
                 message: "We couldn't fetch metadata for this Reddit post. It might be a text-only post or requires login.",
                 suggestion: "Make sure the post contains an image or video.",
             };
-        default:
+        default: {
+            if (url.includes("not found at")) {
+                return {
+                    message: "Server Configuration Error: A required binary (yt-dlp or python) is missing or misconfigured.",
+                    suggestion: url,
+                };
+            }
             return {
                 message: "We couldn't find any downloadable media at this URL. The content may be private, require login, or doesn't contain media.",
                 suggestion: "Try a different URL, or use a direct link to a video, audio, or image file.",
             };
+        }
     }
 }
 
@@ -110,6 +117,14 @@ export async function GET(req: NextRequest) {
         } catch (ytdlpErr) {
             const ytdlpMsg = ytdlpErr instanceof Error ? ytdlpErr.message : "";
             console.log(`[linkever] yt-dlp metadata failed: ${ytdlpMsg.slice(0, 120)}`);
+
+            // If it's a configuration error (binary not found), stop here and report it
+            if (ytdlpMsg.includes("not found at")) {
+                return NextResponse.json(
+                    { error: "CONFIG_ERROR", message: ytdlpMsg, suggestion: "Please check your server environment variables." },
+                    { status: 500 }
+                );
+            }
 
             // 2. Try OG tag scraping (works for Pinterest, blogs, etc.)
             try {

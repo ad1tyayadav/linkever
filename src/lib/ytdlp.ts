@@ -11,7 +11,7 @@ import { VIDEO_FORMATS, AUDIO_FORMATS } from "@/lib/constants";
 const YTDLP = process.env.YTDLP_PATH || "yt-dlp";
 // Only use FFMPEG_PATH if it's a real absolute path, not just "ffmpeg"
 const rawFfmpeg = process.env.FFMPEG_PATH || "";
-const FFMPEG_PATH = rawFfmpeg && rawFfmpeg !== "ffmpeg" && path.isAbsolute(rawFfmpeg) ? rawFfmpeg : "";
+const FFMPEG_PATH = rawFfmpeg && rawFfmpeg !== "ffmpeg" && (path.isAbsolute(rawFfmpeg) || process.platform === "win32") ? rawFfmpeg : "";
 const DOWNLOAD_DIR = path.join(os.tmpdir(), "linkever-downloads");
 
 // Ensure download dir exists
@@ -115,7 +115,11 @@ export async function fetchMetadata(url: string): Promise<MediaMetadata & { avai
         });
 
         proc.on("error", (err) => {
-            reject(new Error(`yt-dlp not found: ${err.message}. Is it installed?`));
+            const isNoent = (err as any).code === "ENOENT";
+            const msg = isNoent
+                ? `yt-dlp not found at "${YTDLP}". Please check YTDLP_PATH in .env or install yt-dlp.`
+                : `yt-dlp execution failed: ${err.message}`;
+            reject(new Error(msg));
         });
     });
 }
@@ -315,7 +319,11 @@ export async function download(
         });
 
         proc.on("error", (err) => {
-            reject(new Error(`yt-dlp not found: ${err.message}`));
+            const isNoent = (err as any).code === "ENOENT";
+            const msg = isNoent
+                ? `yt-dlp not found at "${YTDLP}". Please check YTDLP_PATH in .env or install yt-dlp.`
+                : `yt-dlp execution failed: ${err.message}`;
+            reject(new Error(msg));
         });
     });
 }
