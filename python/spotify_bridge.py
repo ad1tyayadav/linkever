@@ -61,10 +61,14 @@ def get_spotify_metadata(spotify_url: str) -> Dict[str, Any]:
     if not track_id:
         raise ValueError(f"Could not extract track ID from URL: {spotify_url}")
 
+    # Prepare proxies for requests
+    proxy_url = os.environ.get("PROXY_URL")
+    proxies = {"http": proxy_url, "https": proxy_url} if proxy_url else None
+
     # Strategy 1: Embed page with __NEXT_DATA__
     try:
         embed_url = f"https://open.spotify.com/embed/track/{track_id}"
-        resp = requests.get(embed_url, headers=headers, timeout=15)
+        resp = requests.get(embed_url, headers=headers, timeout=15, proxies=proxies)
         resp.raise_for_status()
         html = resp.text
 
@@ -100,7 +104,7 @@ def get_spotify_metadata(spotify_url: str) -> Dict[str, Any]:
     # Strategy 2: oEmbed API fallback (always works, but no artist)
     try:
         oembed_url = f"https://open.spotify.com/oembed?url={spotify_url}"
-        resp = requests.get(oembed_url, timeout=10)
+        resp = requests.get(oembed_url, timeout=10, proxies=proxies)
         resp.raise_for_status()
         data = resp.json()
         title = data.get("title", "Unknown")
@@ -264,7 +268,11 @@ def tag_with_spotify_metadata(filepath: str, metadata: Dict[str, Any]):
         # Embed album art from Spotify
         if metadata.get('artwork'):
             try:
-                artwork_data = requests.get(metadata['artwork'], timeout=10).content
+                # Use proxy for artwork too
+                proxy_url = os.environ.get("PROXY_URL")
+                proxies = {"http": proxy_url, "https": proxy_url} if proxy_url else None
+                
+                artwork_data = requests.get(metadata['artwork'], timeout=10, proxies=proxies).content
                 audio.tags['APIC'] = APIC(
                     encoding=3,
                     mime='image/jpeg',

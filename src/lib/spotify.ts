@@ -1,5 +1,6 @@
 import type { SpotifyTrack, SpotifyCollection } from "@/types";
 import axios from "axios";
+import { URL } from "url";
 
 // ─── URL Parsing ────────────────────────────────────────────────────────────
 
@@ -54,7 +55,11 @@ export async function scrapeSpotifyMetadata(spotifyUrl: string): Promise<Spotify
     // Strategy 1: Fetch the embed page which has __NEXT_DATA__ with full metadata
     try {
         const embedUrl = `https://open.spotify.com/embed/track/${info.id}`;
-        const response = await axios.get(embedUrl, { headers, timeout: 15000 });
+        const response = await axios.get(embedUrl, {
+            headers,
+            timeout: 15000,
+            proxy: process.env.PROXY_URL ? parseProxyUrl(process.env.PROXY_URL) : false,
+        });
         const html: string = response.data;
 
         const nextDataMatch = html.match(/<script\s+id="__NEXT_DATA__"\s+type="application\/json">([^<]+)<\/script>/);
@@ -88,7 +93,10 @@ export async function scrapeSpotifyMetadata(spotifyUrl: string): Promise<Spotify
     // Strategy 2: oEmbed API fallback (always works, but no artist info)
     try {
         const oembedUrl = `https://open.spotify.com/oembed?url=${encodeURIComponent(spotifyUrl)}`;
-        const oembedResp = await axios.get(oembedUrl, { timeout: 10000 });
+        const oembedResp = await axios.get(oembedUrl, {
+            timeout: 10000,
+            proxy: process.env.PROXY_URL ? parseProxyUrl(process.env.PROXY_URL) : false,
+        });
         const oembed = oembedResp.data as { title?: string; thumbnail_url?: string };
 
         const title = oembed.title || "Unknown";
@@ -111,6 +119,7 @@ async function resolveSpotifyLink(url: string): Promise<string> {
         const response = await axios.head(url, {
             maxRedirects: 5,
             timeout: 10000,
+            proxy: process.env.PROXY_URL ? parseProxyUrl(process.env.PROXY_URL) : false,
         });
         return response.request.res.responseUrl || url;
     }
@@ -172,4 +181,21 @@ export function buildYouTubeSearchQuery(track: SpotifyTrack): string {
 export function isSpotifyConfigured(): boolean {
     // No longer required - we use page scraping
     return true;
+}
+
+function parseProxyUrl(proxyUrl: string) {
+    try {
+        const parsed = new URL(proxyUrl);
+        return {
+            protocol: parsed.protocol.replace(":", ""),
+            host: parsed.hostname,
+            port: parseInt(parsed.port),
+            auth: {
+                username: decodeURIComponent(parsed.username),
+                password: decodeURIComponent(parsed.password),
+            },
+        };
+    } catch {
+        return false;
+    }
 }

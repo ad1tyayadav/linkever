@@ -69,9 +69,27 @@ export async function fetchMetadata(url: string): Promise<MediaMetadata & { avai
             "--no-playlist",
             "--no-download",
             "--no-warnings",
-            "--user-agent", "Mozilla/5.0 (compatible; Discordbot/2.0; +https://discordapp.com)",
+            "--user-agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+            "--add-header", "Accept-Language:en-US,en;q=0.9",
+            "--add-header", "Referer:https://www.google.com/",
+            "--geo-bypass",
+            "--extractor-args", "youtube:player_client=android,web;ios:player_client=apple_tv",
             url,
         ];
+
+        // Use proxy if available
+        if (process.env.PROXY_URL) {
+            args.push("--proxy", process.env.PROXY_URL);
+        }
+
+        // Use cookies if available
+        const cookiesPath = path.join(process.cwd(), "cookies.txt");
+        try {
+            const fs = require("fs");
+            if (fs.existsSync(cookiesPath)) {
+                args.push("--cookies", cookiesPath);
+            }
+        } catch { }
 
         const proc = spawn(YTDLP, args, { timeout: 30_000 });
         let stdout = "";

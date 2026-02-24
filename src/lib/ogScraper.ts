@@ -1,5 +1,6 @@
-import type { MediaMetadata, MediaType } from "@/types";
 import { detectPlatform } from "@/lib/platforms";
+import axios from "axios";
+import { URL } from "url";
 
 // ─── OG Tag Scraper ─────────────────────────────────────────────────────────
 // Fetches a web page, parses OpenGraph meta tags, and extracts the direct
@@ -414,7 +415,7 @@ function extractRedditMedia(data: unknown): OgScrapedMedia | null {
         const items = post.gallery_data.metadata.items;
         const firstItem = items[0];
         const mediaId = firstItem.media_id || firstItem.id;
-        
+
         if (mediaId && post.media_metadata?.[mediaId]) {
             const mediaItem = post.media_metadata[mediaId] as RedditMediaMetadata | undefined;
             // Get highest resolution from p (preview) or s (source)
@@ -436,7 +437,7 @@ function extractRedditMedia(data: unknown): OgScrapedMedia | null {
     // Check for single image in preview
     if (post.preview?.images?.[0]) {
         const img = post.preview.images[0];
-        
+
         // Try to get the highest resolution from resolutions array
         if (img.resolutions?.length) {
             const bestRes = img.resolutions.slice().sort((a, b) => b.width - a.width)[0];
@@ -452,7 +453,7 @@ function extractRedditMedia(data: unknown): OgScrapedMedia | null {
                 };
             }
         }
-        
+
         // Fallback to source
         if (img.source?.url) {
             let mediaUrl = decodeHtmlEntities(img.source.url);
@@ -499,14 +500,13 @@ async function fetchInstagramOembed(url: string): Promise<OgScrapedMedia | null>
             oembedUrl = `https://api.instagram.com/oembed/?url=${encodeURIComponent(url)}`;
         }
 
-        const response = await fetch(oembedUrl, {
+        const response = await axios.get(oembedUrl, {
             headers: { "User-Agent": BROWSER_UA },
-            signal: AbortSignal.timeout(10_000),
+            timeout: 10_000,
+            proxy: process.env.PROXY_URL ? parseProxyUrl(process.env.PROXY_URL) : false,
         });
 
-        if (!response.ok) return null;
-
-        const data = await response.json() as {
+        const data = response.data as {
             title?: string;
             author_name?: string;
             thumbnail_url?: string;
@@ -540,18 +540,14 @@ export async function scrapeOgMedia(url: string): Promise<OgScrapedMedia | null>
     const isReddit = /reddit\.com|v\.redd\.it/i.test(url);
     const ua = (isInstagram || isTwitter || isReddit) ? BOT_UA : BROWSER_UA;
 
-    const response = await fetch(url, {
-        method: "GET",
-        redirect: "follow",
-        signal: AbortSignal.timeout(15_000),
+    const response = await axios.get(url, {
         headers: { "User-Agent": ua },
+        timeout: 15_000,
+        maxRedirects: 5,
+        proxy: process.env.PROXY_URL ? parseProxyUrl(process.env.PROXY_URL) : false,
     });
 
-    if (!response.ok) {
-        throw new Error(`HTTP ${response.status}: Could not access this URL.`);
-    }
-
-    const contentType = response.headers.get("content-type") || "";
+    const contentType = response.headers["content-type"] || "";
     if (!contentType.includes("text/html")) {
         // Not an HTML page, nothing to scrape
         return null;
@@ -686,4 +682,21 @@ function sanitizeTitle(title: string): string {
         .replace(/\s+/g, " ")
         .trim()
         .slice(0, 200);
+}
+
+function parseProxyUrl(proxyUrl: string) {
+    try {
+        const parsed = new URL(proxyUrl);
+        return {
+            protocol: parsed.protocol.replace(":", ""),
+            host: parsed.hostname,
+            port: parseInt(parsed.port),
+            auth: {
+                username: decodeURIComponent(parsed.username),
+                password: decodeURIComponent(parsed.password),
+            },
+        };
+    } catch {
+        return false;
+    }
 }
