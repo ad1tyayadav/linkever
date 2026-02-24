@@ -16,8 +16,7 @@ RUN apt-get update && apt-get install -y \
 
 # Install Deno (required by yt-dlp for signature decryption)
 RUN curl -fsSL https://deno.land/x/install/install.sh | sh
-ENV DENO_INSTALL="/root/.deno"
-ENV PATH="$DENO_INSTALL/bin:$PATH"
+RUN cp /root/.deno/bin/deno /usr/local/bin/deno
 
 # Install yt-dlp
 RUN curl -L https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp -o /usr/local/bin/yt-dlp \

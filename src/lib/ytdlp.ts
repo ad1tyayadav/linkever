@@ -160,8 +160,14 @@ export async function download(
         "--add-header", "Referer:https://www.google.com/",
         "--geo-bypass",
         "--extractor-args", "youtube:player_client=android,web;ios:player_client=apple_tv",
+        "--js-runtimes", "nodejs,deno",
         "-o", outputTemplate,
     ];
+
+    // Use proxy if available
+    if (process.env.PROXY_URL) {
+        args.push("--proxy", process.env.PROXY_URL);
+    }
 
     // Use cookies if available in the app root
     const cookiesPath = path.join(process.cwd(), "cookies.txt");

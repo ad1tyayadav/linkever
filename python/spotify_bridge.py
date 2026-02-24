@@ -183,6 +183,7 @@ def download_audio(yt_url: str, output_path: str) -> int:
         "--no-check-certificates",
         "--geo-bypass",
         "--extractor-args", "youtube:player_client=android,web;ios:player_client=apple_tv",
+        "--js-runtimes", "nodejs,deno",
         "--retries", "3",
         "--newline",
         "--progress",
@@ -195,6 +196,11 @@ def download_audio(yt_url: str, output_path: str) -> int:
         cmd.extend(["--cookies", cookies_path])
     elif os.path.exists("cookies.txt"):
         cmd.extend(["--cookies", "cookies.txt"])
+    
+    # Use proxy if available
+    proxy_url = os.environ.get("PROXY_URL")
+    if proxy_url:
+        cmd.extend(["--proxy", proxy_url])
     
     process = subprocess.Popen(
         cmd,
