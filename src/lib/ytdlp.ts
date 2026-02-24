@@ -155,7 +155,9 @@ export async function download(
         "--no-check-certificates",
         "--retries", "3",
         "--force-overwrites",
-        "--user-agent", "Mozilla/5.0 (compatible; Discordbot/2.0; +https://discordapp.com)",
+        "--user-agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+        "--geo-bypass",
+        "--extractor-args", "youtube:player_client=android,web;ios:player_client=apple_tv",
         "-o", outputTemplate,
     ];
 
