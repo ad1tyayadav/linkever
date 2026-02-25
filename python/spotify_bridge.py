@@ -200,6 +200,7 @@ def download_audio(yt_url: str, output_path: str) -> int:
         "--add-header", "Referer:https://www.google.com/",
         "--no-check-certificates",
         "--geo-bypass",
+        "--socket-timeout", "30",
         # Improved player clients for better bypass
         "--extractor-args", "youtube:player_client=android,web;ios:player_client=apple_tv",
         "--no-check-certificates",
