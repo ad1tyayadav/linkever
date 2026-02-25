@@ -68,7 +68,7 @@ def get_spotify_metadata(spotify_url: str) -> Dict[str, Any]:
     # Strategy 1: Embed page with __NEXT_DATA__
     try:
         embed_url = f"https://open.spotify.com/embed/track/{track_id}"
-        resp = requests.get(embed_url, headers=headers, timeout=15, proxies=proxies)
+        resp = requests.get(embed_url, headers=headers, timeout=30, proxies=proxies)
         resp.raise_for_status()
         html = resp.text
 
@@ -104,7 +104,7 @@ def get_spotify_metadata(spotify_url: str) -> Dict[str, Any]:
     # Strategy 2: oEmbed API fallback (always works, but no artist)
     try:
         oembed_url = f"https://open.spotify.com/oembed?url={spotify_url}"
-        resp = requests.get(oembed_url, timeout=10, proxies=proxies)
+        resp = requests.get(oembed_url, timeout=20, proxies=proxies)
         resp.raise_for_status()
         data = resp.json()
         title = data.get("title", "Unknown")

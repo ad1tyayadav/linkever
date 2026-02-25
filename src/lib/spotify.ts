@@ -57,9 +57,15 @@ export async function scrapeSpotifyMetadata(spotifyUrl: string): Promise<Spotify
         const embedUrl = `https://open.spotify.com/embed/track/${info.id}`;
         const response = await axios.get(embedUrl, {
             headers,
-            timeout: 15000,
+            timeout: 30000,
             proxy: process.env.PROXY_URL ? parseProxyUrl(process.env.PROXY_URL) : false,
+            validateStatus: () => true,
         });
+
+        if (response.status !== 200) {
+            console.log(`[linkever] Spotify embed fetch failed with status: ${response.status}`);
+            throw new Error(`Spotify embed fetch failed: ${response.status}`);
+        }
         const html: string = response.data;
 
         const nextDataMatch = html.match(/<script\s+id="__NEXT_DATA__"\s+type="application\/json">([^<]+)<\/script>/);
@@ -94,9 +100,13 @@ export async function scrapeSpotifyMetadata(spotifyUrl: string): Promise<Spotify
     try {
         const oembedUrl = `https://open.spotify.com/oembed?url=${encodeURIComponent(spotifyUrl)}`;
         const oembedResp = await axios.get(oembedUrl, {
-            timeout: 10000,
+            timeout: 20000,
             proxy: process.env.PROXY_URL ? parseProxyUrl(process.env.PROXY_URL) : false,
+            validateStatus: () => true,
         });
+
+        if (oembedResp.status !== 200) return { title: "Spotify Track", artist: "Unknown", album: "", artwork: null, duration: 0, spotifyUrl };
+
         const oembed = oembedResp.data as { title?: string; thumbnail_url?: string };
 
         const title = oembed.title || "Unknown";

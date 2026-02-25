@@ -503,10 +503,12 @@ async function fetchInstagramOembed(url: string): Promise<OgScrapedMedia | null>
 
         const response = await axios.get(oembedUrl, {
             headers: { "User-Agent": BROWSER_UA },
-            timeout: 10_000,
+            timeout: 30_000,
             proxy: process.env.PROXY_URL ? parseProxyUrl(process.env.PROXY_URL) : false,
+            validateStatus: () => true,
         });
 
+        if (response.status !== 200) return null;
         const data = response.data as {
             title?: string;
             author_name?: string;
@@ -543,10 +545,15 @@ export async function scrapeOgMedia(url: string): Promise<OgScrapedMedia | null>
 
     const response = await axios.get(url, {
         headers: { "User-Agent": ua },
-        timeout: 15_000,
+        timeout: 30_000,
         maxRedirects: 5,
         proxy: process.env.PROXY_URL ? parseProxyUrl(process.env.PROXY_URL) : false,
+        validateStatus: () => true,
     });
+
+    if (response.status !== 200) {
+        throw new Error(`HTTP ${response.status}: Platform access denied or redirected.`);
+    }
 
     const contentType = response.headers["content-type"] || "";
     if (!contentType.includes("text/html")) {
