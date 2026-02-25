@@ -554,7 +554,7 @@ export async function scrapeOgMedia(url: string): Promise<OgScrapedMedia | null>
         return null;
     }
 
-    const html = await response.text();
+    const html = response.data;
     const og = parseOgTags(html);
 
     // Skip Spotify pages — they expose 30-second preview audio via og:audio
