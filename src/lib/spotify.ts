@@ -124,7 +124,7 @@ export async function scrapeSpotifyMetadata(spotifyUrl: string): Promise<Spotify
 
 // ─── High-Level API ─────────────────────────────────────────────────────────
 
-async function resolveSpotifyLink(url: string): Promise<string> {
+export async function resolveSpotifyLink(url: string): Promise<string> {
     if (/spotify\.link/i.test(url)) {
         const response = await axios.head(url, {
             maxRedirects: 5,

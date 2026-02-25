@@ -26,7 +26,19 @@ export function useProgress({ jobId, onDone, onError }: UseProgressOptions) {
     onErrorRef.current = onError;
 
     useEffect(() => {
-        if (!jobId) return;
+        if (!jobId) {
+            setProgress(null);
+            setIsDone(false);
+            setDoneData(null);
+            setError(null);
+            terminalRef.current = false;
+            return;
+        }
+
+        setProgress(null);
+        setIsDone(false);
+        setDoneData(null);
+        setError(null);
 
         // Reset terminal flag on new jobId
         terminalRef.current = false;

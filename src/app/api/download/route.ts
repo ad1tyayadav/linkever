@@ -5,7 +5,7 @@ import { downloadRequestSchema } from "@/lib/validators";
 import { download, type DownloadProgress } from "@/lib/ytdlp";
 import { genericDownload } from "@/lib/genericDownloader";
 import { scrapeOgMedia } from "@/lib/ogScraper";
-import { resolveSpotifyUrl } from "@/lib/spotify";
+import { resolveSpotifyLink, resolveSpotifyUrl } from "@/lib/spotify";
 import { spotifyBridgeDownload } from "@/lib/spotifyBridge";
 import {
     createJob,
@@ -49,8 +49,10 @@ export async function POST(req: NextRequest) {
         // Handle Spotify URLs — use the new Spotify bridge (page scrape + YouTube Music)
         if (isSpotifyUrl(url)) {
             // Resolve Spotify URL first to get the title
+            let resolvedSpotifyUrl = url;
             try {
-                const spotifyData = await resolveSpotifyUrl(url);
+                resolvedSpotifyUrl = await resolveSpotifyLink(url);
+                const spotifyData = await resolveSpotifyUrl(resolvedSpotifyUrl);
                 jobTitle = spotifyData.title;
             } catch {
                 jobTitle = "Spotify Track";
@@ -60,7 +62,7 @@ export async function POST(req: NextRequest) {
             recordRequest(ip);
 
             // Start Spotify bridge download
-            startSpotifyDownload(jobId, url);
+            startSpotifyDownload(jobId, resolvedSpotifyUrl);
 
             return NextResponse.json(
                 {
