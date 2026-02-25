@@ -127,11 +127,12 @@ async function startSpotifyDownload(
         const errorMsg = err instanceof Error ? err.message : "Spotify download failed";
         console.error(`[linkever] Spotify bridge failed for job ${jobId}: ${errorMsg}`);
         failJob(jobId, errorMsg);
+        const suggestion = buildSpotifySuggestion(errorMsg);
         notifySubscribers(jobId, {
             status: "error",
             error: "SPOTIFY_DOWNLOAD_FAILED",
             message: errorMsg,
-            suggestion: "Make sure FFmpeg and Python dependencies are installed. Run: pip install -r python/requirements.txt",
+            suggestion,
         });
     }
 }
@@ -224,4 +225,21 @@ function formatFileSize(bytes: number): string {
     if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
     if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
     return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`;
+}
+
+function buildSpotifySuggestion(errorMsg: string): string {
+    const msg = errorMsg.toLowerCase();
+    if (msg.includes("python not found") || msg.includes("python")) {
+        return "Python is required for the Spotify bridge. Install Python and run: pip install -r python/requirements.txt";
+    }
+    if (msg.includes("ffmpeg")) {
+        return "FFmpeg is required. Install FFmpeg and ensure it is on PATH or set FFMPEG_PATH.";
+    }
+    if (msg.includes("signature solving failed") || msg.includes("requested format is not available") || msg.includes("n challenge") || msg.includes("ejs")) {
+        return "yt-dlp couldn't solve YouTube challenges. Set YTDLP_REMOTE_COMPONENTS=ejs:github and ensure yt-dlp is up to date.";
+    }
+    if (msg.includes("403") || msg.includes("forbidden") || msg.includes("429") || msg.includes("blocked")) {
+        return "The proxy or server IP is blocked. Try a different proxy or region.";
+    }
+    return "Please try again or use a different track URL.";
 }

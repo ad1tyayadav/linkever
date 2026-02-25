@@ -186,6 +186,8 @@ def download_audio(yt_url: str, output_path: str) -> int:
     elif os.path.exists("/app/yt-dlp"):
         yt_dlp_path = "/app/yt-dlp"
     
+    remote_components = os.environ.get("YTDLP_REMOTE_COMPONENTS", "ejs:github")
+
     cmd = [
         yt_dlp_path,
         yt_url,
@@ -203,6 +205,8 @@ def download_audio(yt_url: str, output_path: str) -> int:
         "--socket-timeout", "30",
         # Improved player clients for better bypass
         "--extractor-args", "youtube:player_client=android,web;ios:player_client=apple_tv",
+        "--js-runtimes", "nodejs,deno",
+        "--remote-components", remote_components,
         "--no-check-certificates",
         "--retries", "5",
         "--fragment-retries", "10",

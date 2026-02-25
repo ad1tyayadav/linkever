@@ -9,6 +9,7 @@ import { VIDEO_FORMATS, AUDIO_FORMATS } from "@/lib/constants";
 // ─── Config ─────────────────────────────────────────────────────────────────
 
 const YTDLP = process.env.YTDLP_PATH || "yt-dlp";
+const YTDLP_REMOTE_COMPONENTS = process.env.YTDLP_REMOTE_COMPONENTS || "ejs:github";
 // Only use FFMPEG_PATH if it's a real absolute path, not just "ffmpeg"
 const rawFfmpeg = process.env.FFMPEG_PATH || "";
 const FFMPEG_PATH = rawFfmpeg && rawFfmpeg !== "ffmpeg" && (path.isAbsolute(rawFfmpeg) || process.platform === "win32") ? rawFfmpeg : "";
@@ -77,6 +78,10 @@ export async function fetchMetadata(url: string): Promise<MediaMetadata & { avai
             "--extractor-args", "youtube:player_client=android,web;ios:player_client=apple_tv",
             url,
         ];
+
+        if (YTDLP_REMOTE_COMPONENTS) {
+            args.splice(args.length - 1, 0, "--remote-components", YTDLP_REMOTE_COMPONENTS);
+        }
 
         // Use proxy if available
         if (process.env.PROXY_URL) {
@@ -184,6 +189,10 @@ export async function download(
         "--js-runtimes", "nodejs,deno",
         "-o", outputTemplate,
     ];
+
+    if (YTDLP_REMOTE_COMPONENTS) {
+        args.push("--remote-components", YTDLP_REMOTE_COMPONENTS);
+    }
 
     // Use proxy if available
     if (process.env.PROXY_URL) {

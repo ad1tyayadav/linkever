@@ -2,9 +2,10 @@ import { spawn } from "child_process";
 import path from "path";
 import os from "os";
 import fs from "fs/promises";
+import fsSync from "fs";
 import type { DownloadProgress, ProgressCallback } from "@/lib/ytdlp";
 
-const PYTHON_CMD = process.env.PYTHON_PATH || (process.platform === "win32" ? "py" : "python3");
+const PYTHON_CMD = resolvePythonCmd();
 const DOWNLOAD_DIR = path.join(os.tmpdir(), "linkever-downloads");
 
 interface SpotifyMetadata {
@@ -171,6 +172,27 @@ export async function spotifyBridgeDownload(
             reject(new Error(msg));
         });
     });
+}
+
+function resolvePythonCmd(): string {
+    const configured = process.env.PYTHON_PATH?.trim();
+    if (configured) {
+        // If an absolute path is set, ensure it exists. Otherwise let PATH resolve it.
+        if (path.isAbsolute(configured)) {
+            if (fsSync.existsSync(configured)) {
+                return configured;
+            }
+        } else {
+            return configured;
+        }
+    }
+
+    if (process.platform === "win32") {
+        // Prefer the Python launcher on Windows
+        return "py";
+    }
+
+    return "python3";
 }
 
 function parseBridgeError(output: string): string {
