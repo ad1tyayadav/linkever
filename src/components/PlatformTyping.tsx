@@ -18,7 +18,6 @@ const PLATFORMS: PlatformData[] = [
     { name: "Vimeo", color: "#1AB7EA" },
     {name: "Pinterest", color: "#E60023"},
     { name: "SoundCloud", color: "#FF5500" },
-    {name : "100+ platforms", color: "#000000"}
 ];
 
 export function PlatformTyping() {
