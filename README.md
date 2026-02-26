@@ -20,7 +20,11 @@ Open [http://localhost:3000](http://localhost:3000) with your browser to see the
 
 - Some hosts/IPs require a proxy for YouTube/Spotify scraping: set `PROXY_URL` (see `.env.example`).
 - If YouTube starts returning “Sign in to confirm you’re not a bot”, your server IP/proxy is being challenged. Try a different proxy/IP (residential usually works better than datacenter).
-- If you use YouTube cookies, do **not** commit them. Provide them at runtime (secret/volume) and set `YTDLP_COOKIES_PATH`. You can disable cookie usage with `YTDLP_DISABLE_COOKIES=1`.
+- If you use YouTube cookies, do **not** commit them. Provide them at runtime (secret/volume) and set `YTDLP_COOKIES_PATH`, or set `YTDLP_COOKIES_B64` (base64 of a Netscape `cookies.txt`). You can disable cookie usage with `YTDLP_DISABLE_COOKIES=1`.
+
+To create `YTDLP_COOKIES_B64`:
+- macOS/Linux: `base64 -w0 cookies.txt`
+- Windows PowerShell: `[Convert]::ToBase64String([IO.File]::ReadAllBytes("cookies.txt"))`
 
 You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
 

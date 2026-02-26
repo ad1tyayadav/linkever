@@ -7,6 +7,13 @@ import { fetchOgMetadata } from "@/lib/ogScraper";
 import { VIDEO_FORMATS, AUDIO_FORMATS, FILE_FORMATS } from "@/lib/constants";
 import type { MetadataResponse, MediaType, FormatOption, Platform } from "@/types";
 
+function getErrorKind(err: unknown): string | undefined {
+    if (!err || typeof err !== "object") return undefined;
+    if (!("kind" in err)) return undefined;
+    const kind = (err as Record<string, unknown>).kind;
+    return typeof kind === "string" ? kind : undefined;
+}
+
 function getFormatsForType(type: MediaType): FormatOption[] {
     switch (type) {
         case "audio": return AUDIO_FORMATS;
@@ -116,6 +123,7 @@ export async function GET(req: NextRequest) {
             return NextResponse.json({ ...metadata, formats } as MetadataResponse);
         } catch (ytdlpErr) {
             const ytdlpMsg = ytdlpErr instanceof Error ? ytdlpErr.message : "";
+            const ytdlpKind = getErrorKind(ytdlpErr);
             console.log(`[linkever] yt-dlp metadata failed: ${ytdlpMsg.slice(0, 120)}`);
 
             // If it's a configuration error (binary not found), stop here and report it
@@ -123,6 +131,19 @@ export async function GET(req: NextRequest) {
                 return NextResponse.json(
                     { error: "CONFIG_ERROR", message: ytdlpMsg, suggestion: "Please check your server environment variables." },
                     { status: 500 }
+                );
+            }
+
+            // YouTube bot-check: other fallbacks won't work for YouTube anyway.
+            if (platform.id === "youtube" && ytdlpKind === "BOT_CHECK") {
+                return NextResponse.json(
+                    {
+                        error: "YOUTUBE_BOT_CHECK",
+                        message: "YouTube blocked this server IP (bot check).",
+                        suggestion: "Provide YouTube cookies (YTDLP_COOKIES_PATH or YTDLP_COOKIES_B64) or change PROXY_URL / server IP.",
+                        platform: platform.id,
+                    },
+                    { status: 503 }
                 );
             }
 

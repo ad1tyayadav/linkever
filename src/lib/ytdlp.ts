@@ -17,13 +17,47 @@ const rawFfmpeg = process.env.FFMPEG_PATH || "";
 const FFMPEG_PATH = rawFfmpeg && rawFfmpeg !== "ffmpeg" && (path.isAbsolute(rawFfmpeg) || process.platform === "win32") ? rawFfmpeg : "";
 const DOWNLOAD_DIR = path.join(os.tmpdir(), "linkever-downloads");
 
+type YtdlpErrorKind =
+    | "BOT_CHECK"
+    | "INVALID_COOKIES"
+    | "AGE_RESTRICTED"
+    | "RATE_LIMIT"
+    | "UNSUPPORTED"
+    | "DRM"
+    | "UNAVAILABLE"
+    | "LIVE"
+    | "UNKNOWN";
+
+let runtimeCookiesPath: string | null = null;
+let runtimeCookiesInitAttempted = false;
+
 // Ensure download dir exists
 async function ensureDownloadDir() {
     await fs.mkdir(DOWNLOAD_DIR, { recursive: true });
     return DOWNLOAD_DIR;
 }
 
-function resolveCookiesArgs(): { used: boolean; args: string[] } {
+function tryInitRuntimeCookiesFromEnv(): string | null {
+    if (runtimeCookiesInitAttempted) return runtimeCookiesPath;
+    runtimeCookiesInitAttempted = true;
+
+    const b64 = (process.env.YTDLP_COOKIES_B64 || "").trim();
+    if (!b64) return null;
+
+    try {
+        const decoded = Buffer.from(b64, "base64").toString("utf8");
+        if (!decoded || decoded.length < 10) return null;
+
+        const target = path.join(os.tmpdir(), "linkever-ytdlp-cookies.txt");
+        fsSync.writeFileSync(target, decoded, { encoding: "utf8", mode: 0o600 });
+        runtimeCookiesPath = target;
+        return target;
+    } catch {
+        return null;
+    }
+}
+
+function resolveCookiesArgs(): { used: boolean; args: string[]; source?: "path" | "b64" | "default" } {
     const disabled = (process.env.YTDLP_DISABLE_COOKIES || "").trim().toLowerCase();
     if (disabled === "1" || disabled === "true" || disabled === "yes") {
         return { used: false, args: [] };
@@ -31,12 +65,17 @@ function resolveCookiesArgs(): { used: boolean; args: string[] } {
 
     const configured = (process.env.YTDLP_COOKIES_PATH || "").trim();
     if (configured && fsSync.existsSync(configured)) {
-        return { used: true, args: ["--cookies", configured] };
+        return { used: true, args: ["--cookies", configured], source: "path" };
+    }
+
+    const envPath = tryInitRuntimeCookiesFromEnv();
+    if (envPath && fsSync.existsSync(envPath)) {
+        return { used: true, args: ["--cookies", envPath], source: "b64" };
     }
 
     const defaultPath = path.join(process.cwd(), "cookies.txt");
     if (fsSync.existsSync(defaultPath)) {
-        return { used: true, args: ["--cookies", defaultPath] };
+        return { used: true, args: ["--cookies", defaultPath], source: "default" };
     }
 
     return { used: false, args: [] };
@@ -64,6 +103,24 @@ function appendJsRuntimes(args: string[]) {
 }
 
 // ─── Types ──────────────────────────────────────────────────────────────────
+
+function classifyYtdlpStderr(stderr: string): YtdlpErrorKind {
+    const lower = (stderr || "").toLowerCase();
+
+    if (lower.includes("sign in to confirm youre not a bot") || lower.includes("sign in to confirm you're not a bot")) {
+        return "BOT_CHECK";
+    }
+    if (isInvalidCookiesError(stderr)) return "INVALID_COOKIES";
+
+    if (lower.includes("sign in to confirm your age") || lower.includes("age-restricted")) return "AGE_RESTRICTED";
+    if (lower.includes("http error 429") || lower.includes("too many requests")) return "RATE_LIMIT";
+    if (lower.includes("unsupported url") || lower.includes("no suitable infoextractor")) return "UNSUPPORTED";
+    if (lower.includes("drm")) return "DRM";
+    if (lower.includes("video unavailable") || lower.includes("not available") || lower.includes("this video is unavailable")) return "UNAVAILABLE";
+    if (lower.includes("this live event has not started") || lower.includes("is_live")) return "LIVE";
+
+    return "UNKNOWN";
+}
 
 interface YtdlpRawFormat {
     format_id: string;
@@ -151,8 +208,9 @@ export async function fetchMetadata(url: string): Promise<MediaMetadata & { avai
 
             proc.on("close", (code) => {
                 if (code !== 0) {
+                    const kind = classifyYtdlpStderr(stderr);
                     const errorMsg = parseYtdlpError(stderr);
-                    reject(Object.assign(new Error(errorMsg), { stderr }));
+                    reject(Object.assign(new Error(errorMsg), { stderr, kind }));
                     return;
                 }
 
@@ -179,7 +237,7 @@ export async function fetchMetadata(url: string): Promise<MediaMetadata & { avai
             });
 
             proc.on("error", (err) => {
-                const isNoent = (err as any).code === "ENOENT";
+                const isNoent = (err as NodeJS.ErrnoException).code === "ENOENT";
                 const msg = isNoent
                     ? `yt-dlp not found at "${YTDLP}". Please check YTDLP_PATH in .env or install yt-dlp.`
                     : `yt-dlp execution failed: ${err.message}`;
@@ -192,8 +250,13 @@ export async function fetchMetadata(url: string): Promise<MediaMetadata & { avai
 
     try {
         return await runOnce(true);
-    } catch (err: any) {
-        if (err?.stderr && isInvalidCookiesError(err.stderr)) {
+    } catch (err) {
+        const stderr =
+            err && typeof err === "object" && "stderr" in err
+                ? (err as Record<string, unknown>).stderr
+                : undefined;
+
+        if (typeof stderr === "string" && isInvalidCookiesError(stderr)) {
             return await runOnce(false);
         }
         throw err;
@@ -361,6 +424,7 @@ export async function download(
         proc.on("close", async (code) => {
             if (code !== 0) {
                 console.error(`[linkever] yt-dlp failed (exit code ${code}):`, stderr);
+                const kind = classifyYtdlpStderr(stderr);
                 const errorMsg = parseYtdlpError(stderr);
                 onProgress({
                     status: "error",
@@ -369,7 +433,7 @@ export async function download(
                     eta: "",
                     step: errorMsg,
                 });
-                reject(new Error(errorMsg));
+                reject(Object.assign(new Error(errorMsg), { stderr, kind }));
                 return;
             }
 
@@ -418,7 +482,7 @@ export async function download(
         });
 
         proc.on("error", (err) => {
-            const isNoent = (err as any).code === "ENOENT";
+            const isNoent = (err as NodeJS.ErrnoException).code === "ENOENT";
             const msg = isNoent
                 ? `yt-dlp not found at "${YTDLP}". Please check YTDLP_PATH in .env or install yt-dlp.`
                 : `yt-dlp execution failed: ${err.message}`;
@@ -497,6 +561,12 @@ function parseProgressLine(line: string, lastPercentRef: { current: number } = {
 }
 
 function parseYtdlpError(stderr: string): string {
+    if (stderr.includes("Sign in to confirm youre not a bot") || stderr.includes("Sign in to confirm you're not a bot")) {
+        return "YouTube blocked this server IP (bot check). Provide YouTube cookies or change proxy/IP and try again.";
+    }
+    if (isInvalidCookiesError(stderr)) {
+        return "YouTube cookies are expired/invalid on the server. Update cookies or disable cookies and try again.";
+    }
     if (stderr.includes("Private video") || stderr.includes("Sign in to confirm your age")) {
         return "This video is private or age-restricted — we can't access it.";
     }

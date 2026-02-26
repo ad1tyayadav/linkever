@@ -11,6 +11,8 @@ import json
 import subprocess
 import re
 import os
+import base64
+import tempfile
 from typing import Optional, Dict, Any
 
 # Install dependencies check
@@ -224,6 +226,22 @@ def download_audio(yt_url: str, output_path: str) -> int:
         configured = os.environ.get("YTDLP_COOKIES_PATH", "").strip()
         if configured and os.path.exists(configured):
             return configured
+
+        b64 = os.environ.get("YTDLP_COOKIES_B64", "").strip()
+        if b64:
+            try:
+                decoded = base64.b64decode(b64).decode("utf-8", errors="ignore")
+                if decoded and len(decoded) > 10:
+                    p = os.path.join(tempfile.gettempdir(), "linkever-ytdlp-cookies.txt")
+                    with open(p, "w", encoding="utf-8") as f:
+                        f.write(decoded)
+                    try:
+                        os.chmod(p, 0o600)
+                    except Exception:
+                        pass
+                    return p
+            except Exception:
+                pass
 
         # Back-compat defaults.
         for p in ("/app/cookies.txt", "cookies.txt"):

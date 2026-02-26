@@ -17,6 +17,13 @@ import {
     recordRequest,
 } from "@/lib/jobManager";
 
+function getErrorKind(err: unknown): string | undefined {
+    if (!err || typeof err !== "object") return undefined;
+    if (!("kind" in err)) return undefined;
+    const kind = (err as Record<string, unknown>).kind;
+    return typeof kind === "string" ? kind : undefined;
+}
+
 export async function POST(req: NextRequest) {
     try {
         const body = await req.json();
@@ -84,7 +91,7 @@ export async function POST(req: NextRequest) {
             format,
             quality,
             audioOnly,
-        });
+        }, platform.id);
 
         return NextResponse.json(
             {
@@ -145,7 +152,8 @@ async function startDownload(
     jobId: string,
     url: string,
     originalUrl: string,
-    options: { format?: string; quality?: string; audioOnly?: boolean }
+    options: { format?: string; quality?: string; audioOnly?: boolean },
+    platformId: ReturnType<typeof detectPlatform>["id"]
 ) {
     const progressCallback = (progress: DownloadProgress) => {
         if (progress.status === "done" || progress.status === "error") return;
@@ -160,7 +168,20 @@ async function startDownload(
         return;
     } catch (ytdlpErr) {
         const ytdlpMsg = ytdlpErr instanceof Error ? ytdlpErr.message : "";
+        const ytdlpKind = getErrorKind(ytdlpErr);
         console.log(`[linkever] yt-dlp failed for job ${jobId}: ${ytdlpMsg.slice(0, 120)}`);
+
+        if (platformId === "youtube" && ytdlpKind === "BOT_CHECK") {
+            const errorMsg = "YouTube blocked this server IP (bot check).";
+            failJob(jobId, errorMsg);
+            notifySubscribers(jobId, {
+                status: "error",
+                error: "YOUTUBE_BOT_CHECK",
+                message: errorMsg,
+                suggestion: "Provide YouTube cookies (YTDLP_COOKIES_PATH or YTDLP_COOKIES_B64) or change PROXY_URL / server IP.",
+            });
+            return;
+        }
     }
 
     // 2. Try OG scraping → get direct media URL → download via generic
