@@ -180,7 +180,6 @@ def download_audio(yt_url: str, output_path: str) -> int:
         yt_dlp_path = "/app/yt-dlp"
     
     remote_components = os.environ.get("YTDLP_REMOTE_COMPONENTS", "ejs:github")
-    js_runtimes = os.environ.get("YTDLP_JS_RUNTIMES", "node,deno")
 
     base_cmd = [
         yt_dlp_path,
@@ -199,7 +198,6 @@ def download_audio(yt_url: str, output_path: str) -> int:
         "--socket-timeout", "30",
         # Improved player clients for better bypass
         "--extractor-args", "youtube:player_client=android,web;ios:player_client=apple_tv",
-        "--js-runtimes", js_runtimes,
         "--remote-components", remote_components,
         "--retries", "5",
         "--fragment-retries", "10",
@@ -207,6 +205,17 @@ def download_audio(yt_url: str, output_path: str) -> int:
         "--progress",
         "--output", output_path
     ]
+
+    def append_js_runtimes(cmd: list) -> None:
+        # yt-dlp expects one runtime per flag: --js-runtimes RUNTIME[:PATH]
+        raw = os.environ.get("YTDLP_JS_RUNTIMES", "deno").strip()
+        if not raw:
+            return
+
+        for p in re.split(r"[,\s]+", raw):
+            p = p.strip()
+            if p:
+                cmd.extend(["--js-runtimes", p])
 
     def resolve_cookies_path() -> Optional[str]:
         if os.environ.get("YTDLP_DISABLE_COOKIES", "").strip().lower() in ("1", "true", "yes"):
@@ -268,10 +277,12 @@ def download_audio(yt_url: str, output_path: str) -> int:
 
     proxy_url = os.environ.get("PROXY_URL")
     if proxy_url:
-        print(f"Using proxy: {proxy_url}", file=sys.stderr)
+        # Avoid leaking proxy credentials to client-facing logs.
+        print("Using proxy (redacted)", file=sys.stderr)
 
     def build_cmd(include_cookies: bool) -> list:
         cmd = list(base_cmd)
+        append_js_runtimes(cmd)
         if proxy_url:
             cmd.extend(["--proxy", proxy_url])
         if include_cookies and cookies_path:

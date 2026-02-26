@@ -106,8 +106,9 @@ export async function spotifyBridgeDownload(
         proc.on("close", async (code) => {
             clearTimeout(killTimer);
             if (code !== 0) {
-                console.error(`[linkever] Spotify bridge failed (exit code ${code}):`, stderr);
-                const errorMsg = parseBridgeError(stderr);
+                const sanitized = redactSensitive(stderr);
+                console.error(`[linkever] Spotify bridge failed (exit code ${code}):`, sanitized);
+                const errorMsg = parseBridgeError(sanitized);
                 onProgress({
                     status: "error",
                     percent: 0,
@@ -224,6 +225,11 @@ function parseBridgeError(output: string): string {
         return "Content is age-restricted and cannot be downloaded by the server.";
     }
     return output.slice(0, 150) || "Failed to download from Spotify. Please try again.";
+}
+
+function redactSensitive(text: string): string {
+    // Redact credentials in proxy URLs and similar: http(s)://user:pass@host -> http(s)://[redacted]@host
+    return text.replace(/(https?:\/\/)([^@\s]+)@/g, "$1[redacted]@");
 }
 
 export async function isSpotifyBridgeAvailable(): Promise<boolean> {

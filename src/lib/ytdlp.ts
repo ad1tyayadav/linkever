@@ -11,6 +11,7 @@ import { VIDEO_FORMATS, AUDIO_FORMATS } from "@/lib/constants";
 
 const YTDLP = process.env.YTDLP_PATH || "yt-dlp";
 const YTDLP_REMOTE_COMPONENTS = process.env.YTDLP_REMOTE_COMPONENTS || "ejs:github";
+const YTDLP_JS_RUNTIMES = process.env.YTDLP_JS_RUNTIMES || "deno";
 // Only use FFMPEG_PATH if it's a real absolute path, not just "ffmpeg"
 const rawFfmpeg = process.env.FFMPEG_PATH || "";
 const FFMPEG_PATH = rawFfmpeg && rawFfmpeg !== "ffmpeg" && (path.isAbsolute(rawFfmpeg) || process.platform === "win32") ? rawFfmpeg : "";
@@ -48,6 +49,18 @@ function isInvalidCookiesError(text: string): boolean {
         lower.includes("provided youtube account cookies are no longer valid") ||
         lower.includes("provided youtube cookies are no longer valid")
     );
+}
+
+function appendJsRuntimes(args: string[]) {
+    // yt-dlp expects one runtime per flag: --js-runtimes RUNTIME[:PATH]
+    const raw = (YTDLP_JS_RUNTIMES || "").trim();
+    if (!raw) return;
+
+    for (const part of raw.split(/[,\s]+/g)) {
+        const token = part.trim();
+        if (!token) continue;
+        args.push("--js-runtimes", token);
+    }
 }
 
 // ─── Types ──────────────────────────────────────────────────────────────────
@@ -121,6 +134,8 @@ export async function fetchMetadata(url: string): Promise<MediaMetadata & { avai
             if (withCookies) {
                 args.push(...resolveCookiesArgs().args);
             }
+
+            appendJsRuntimes(args);
 
             const proc = spawn(YTDLP, args, { timeout: 30_000 });
             let stdout = "";
@@ -223,7 +238,6 @@ export async function download(
         "--add-header", "Referer:https://www.google.com/",
         "--geo-bypass",
         "--extractor-args", "youtube:player_client=android,web;ios:player_client=apple_tv",
-        "--js-runtimes", "node,deno",
         "-o", outputTemplate,
     ];
 
@@ -240,6 +254,8 @@ export async function download(
     if (cookies.used) {
         args.push(...cookies.args);
     }
+
+    appendJsRuntimes(args);
 
     // precision matching by duration (fixes music video vs album track mismatch)
     if (options.duration && options.duration > 0) {
@@ -280,7 +296,7 @@ export async function download(
 
     args.push(url);
 
-    console.log(`[linkever] yt-dlp download: ${YTDLP} ${args.join(" ")}`);
+    console.log(`[linkever] yt-dlp download: ${formatYtdlpLogCmd(YTDLP, args)}`);
 
     return new Promise((resolve, reject) => {
         const proc = spawn(YTDLP, args, { timeout: 600_000 }); // 10 min timeout
@@ -409,6 +425,22 @@ export async function download(
             reject(new Error(msg));
         });
     });
+}
+
+function formatYtdlpLogCmd(bin: string, args: string[]): string {
+    const redacted: string[] = [bin];
+    for (let i = 0; i < args.length; i++) {
+        const a = args[i];
+        redacted.push(a);
+        if (a === "--proxy" || a === "--cookies") {
+            const next = args[i + 1];
+            if (next) {
+                redacted.push("[redacted]");
+                i++;
+            }
+        }
+    }
+    return redacted.join(" ");
 }
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
