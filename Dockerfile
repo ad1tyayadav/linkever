@@ -37,6 +37,10 @@ RUN pip3 install --no-cache-dir -r python/requirements.txt --break-system-packag
 # Copy the rest of the application
 COPY . .
 
+# Don't bake browser cookies into the image. If needed, provide them at runtime
+# (secret/volume) and point to them via YTDLP_COOKIES_PATH.
+RUN rm -f cookies.txt
+
 # Build the Next.js application
 ENV NEXT_TELEMETRY_DISABLED 1
 RUN npm run build

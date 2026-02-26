@@ -2,6 +2,7 @@ import { spawn } from "child_process";
 import path from "path";
 import os from "os";
 import fs from "fs/promises";
+import fsSync from "fs";
 import type { MediaMetadata, Platform, MediaType, FormatOption } from "@/types";
 import { detectPlatform, isSpotifyUrl } from "@/lib/platforms";
 import { VIDEO_FORMATS, AUDIO_FORMATS } from "@/lib/constants";
@@ -19,6 +20,34 @@ const DOWNLOAD_DIR = path.join(os.tmpdir(), "linkever-downloads");
 async function ensureDownloadDir() {
     await fs.mkdir(DOWNLOAD_DIR, { recursive: true });
     return DOWNLOAD_DIR;
+}
+
+function resolveCookiesArgs(): { used: boolean; args: string[] } {
+    const disabled = (process.env.YTDLP_DISABLE_COOKIES || "").trim().toLowerCase();
+    if (disabled === "1" || disabled === "true" || disabled === "yes") {
+        return { used: false, args: [] };
+    }
+
+    const configured = (process.env.YTDLP_COOKIES_PATH || "").trim();
+    if (configured && fsSync.existsSync(configured)) {
+        return { used: true, args: ["--cookies", configured] };
+    }
+
+    const defaultPath = path.join(process.cwd(), "cookies.txt");
+    if (fsSync.existsSync(defaultPath)) {
+        return { used: true, args: ["--cookies", defaultPath] };
+    }
+
+    return { used: false, args: [] };
+}
+
+function isInvalidCookiesError(text: string): boolean {
+    const lower = text.toLowerCase();
+    return (
+        lower.includes("cookies are no longer valid") ||
+        lower.includes("provided youtube account cookies are no longer valid") ||
+        lower.includes("provided youtube cookies are no longer valid")
+    );
 }
 
 // ─── Types ──────────────────────────────────────────────────────────────────
@@ -64,88 +93,96 @@ export type ProgressCallback = (progress: DownloadProgress) => void;
 // ─── Metadata Fetch ─────────────────────────────────────────────────────────
 
 export async function fetchMetadata(url: string): Promise<MediaMetadata & { availableFormats: FormatOption[] }> {
-    return new Promise((resolve, reject) => {
-        const args = [
-            "--dump-json",
-            "--no-playlist",
-            "--no-download",
-            "--no-warnings",
-            "--socket-timeout", "30",
-            "--user-agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
-            "--add-header", "Accept-Language:en-US,en;q=0.9",
-            "--add-header", "Referer:https://www.google.com/",
-            "--geo-bypass",
-            "--extractor-args", "youtube:player_client=android,web;ios:player_client=apple_tv",
-            url,
-        ];
+    const runOnce = (withCookies: boolean) =>
+        new Promise<MediaMetadata & { availableFormats: FormatOption[] }>((resolve, reject) => {
+            const args = [
+                "--dump-json",
+                "--no-playlist",
+                "--no-download",
+                "--no-warnings",
+                "--socket-timeout", "30",
+                "--user-agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+                "--add-header", "Accept-Language:en-US,en;q=0.9",
+                "--add-header", "Referer:https://www.google.com/",
+                "--geo-bypass",
+                "--extractor-args", "youtube:player_client=android,web;ios:player_client=apple_tv",
+                url,
+            ];
 
-        if (YTDLP_REMOTE_COMPONENTS) {
-            args.splice(args.length - 1, 0, "--remote-components", YTDLP_REMOTE_COMPONENTS);
+            if (YTDLP_REMOTE_COMPONENTS) {
+                args.splice(args.length - 1, 0, "--remote-components", YTDLP_REMOTE_COMPONENTS);
+            }
+
+            // Use proxy if available
+            if (process.env.PROXY_URL) {
+                args.push("--proxy", process.env.PROXY_URL);
+            }
+
+            if (withCookies) {
+                args.push(...resolveCookiesArgs().args);
+            }
+
+            const proc = spawn(YTDLP, args, { timeout: 30_000 });
+            let stdout = "";
+            let stderr = "";
+
+            proc.stdout.on("data", (chunk: Buffer) => {
+                stdout += chunk.toString();
+            });
+
+            proc.stderr.on("data", (chunk: Buffer) => {
+                stderr += chunk.toString();
+            });
+
+            proc.on("close", (code) => {
+                if (code !== 0) {
+                    const errorMsg = parseYtdlpError(stderr);
+                    reject(Object.assign(new Error(errorMsg), { stderr }));
+                    return;
+                }
+
+                try {
+                    const data: YtdlpMetadata = JSON.parse(stdout.trim());
+                    const platform = detectPlatform(url);
+                    const type = determineMediaType(data, platform.id);
+                    const availableFormats = extractAvailableFormats(data.formats, type, data.duration || 0);
+
+                    resolve({
+                        title: data.title || "Unknown Title",
+                        author: data.uploader || "Unknown",
+                        thumbnail: data.thumbnail || "",
+                        duration: data.duration || 0,
+                        platform: platform.id,
+                        type,
+                        isLive: data.is_live || false,
+                        originalUrl: url,
+                        availableFormats,
+                    });
+                } catch {
+                    reject(new Error("Failed to parse media metadata"));
+                }
+            });
+
+            proc.on("error", (err) => {
+                const isNoent = (err as any).code === "ENOENT";
+                const msg = isNoent
+                    ? `yt-dlp not found at "${YTDLP}". Please check YTDLP_PATH in .env or install yt-dlp.`
+                    : `yt-dlp execution failed: ${err.message}`;
+                reject(new Error(msg));
+            });
+        });
+
+    const cookies = resolveCookiesArgs();
+    if (!cookies.used) return runOnce(false);
+
+    try {
+        return await runOnce(true);
+    } catch (err: any) {
+        if (err?.stderr && isInvalidCookiesError(err.stderr)) {
+            return await runOnce(false);
         }
-
-        // Use proxy if available
-        if (process.env.PROXY_URL) {
-            args.push("--proxy", process.env.PROXY_URL);
-        }
-
-        // Use cookies if available
-        const cookiesPath = path.join(process.cwd(), "cookies.txt");
-        try {
-            const fs = require("fs");
-            if (fs.existsSync(cookiesPath)) {
-                args.push("--cookies", cookiesPath);
-            }
-        } catch { }
-
-        const proc = spawn(YTDLP, args, { timeout: 30_000 });
-        let stdout = "";
-        let stderr = "";
-
-        proc.stdout.on("data", (chunk: Buffer) => {
-            stdout += chunk.toString();
-        });
-
-        proc.stderr.on("data", (chunk: Buffer) => {
-            stderr += chunk.toString();
-        });
-
-        proc.on("close", (code) => {
-            if (code !== 0) {
-                const errorMsg = parseYtdlpError(stderr);
-                reject(new Error(errorMsg));
-                return;
-            }
-
-            try {
-                const data: YtdlpMetadata = JSON.parse(stdout.trim());
-                const platform = detectPlatform(url);
-                const type = determineMediaType(data, platform.id);
-                const availableFormats = extractAvailableFormats(data.formats, type, data.duration || 0);
-
-                resolve({
-                    title: data.title || "Unknown Title",
-                    author: data.uploader || "Unknown",
-                    thumbnail: data.thumbnail || "",
-                    duration: data.duration || 0,
-                    platform: platform.id,
-                    type,
-                    isLive: data.is_live || false,
-                    originalUrl: url,
-                    availableFormats,
-                });
-            } catch {
-                reject(new Error("Failed to parse media metadata"));
-            }
-        });
-
-        proc.on("error", (err) => {
-            const isNoent = (err as any).code === "ENOENT";
-            const msg = isNoent
-                ? `yt-dlp not found at "${YTDLP}". Please check YTDLP_PATH in .env or install yt-dlp.`
-                : `yt-dlp execution failed: ${err.message}`;
-            reject(new Error(msg));
-        });
-    });
+        throw err;
+    }
 }
 
 // ─── Download ───────────────────────────────────────────────────────────────
@@ -186,7 +223,7 @@ export async function download(
         "--add-header", "Referer:https://www.google.com/",
         "--geo-bypass",
         "--extractor-args", "youtube:player_client=android,web;ios:player_client=apple_tv",
-        "--js-runtimes", "nodejs,deno",
+        "--js-runtimes", "node,deno",
         "-o", outputTemplate,
     ];
 
@@ -199,14 +236,10 @@ export async function download(
         args.push("--proxy", process.env.PROXY_URL);
     }
 
-    // Use cookies if available in the app root
-    const cookiesPath = path.join(process.cwd(), "cookies.txt");
-    try {
-        const fs = await import("fs");
-        if (fs.existsSync(cookiesPath)) {
-            args.push("--cookies", cookiesPath);
-        }
-    } catch { }
+    const cookies = resolveCookiesArgs();
+    if (cookies.used) {
+        args.push(...cookies.args);
+    }
 
     // precision matching by duration (fixes music video vs album track mismatch)
     if (options.duration && options.duration > 0) {

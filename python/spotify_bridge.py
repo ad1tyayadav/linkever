@@ -172,13 +172,6 @@ def download_audio(yt_url: str, output_path: str) -> int:
     # Ensure output directory exists
     os.makedirs(os.path.dirname(output_path), exist_ok=True)
     
-    # Check for deno installation
-    deno_path = None
-    for p in ["/usr/local/bin/deno", "/root/.deno/bin/deno", "/app/bin/deno"]:
-        if os.path.exists(p):
-            deno_path = p
-            break
-    
     # Try to find yt-dlp with full path
     yt_dlp_path = "yt-dlp"
     if os.path.exists("/usr/local/bin/yt-dlp"):
@@ -187,8 +180,9 @@ def download_audio(yt_url: str, output_path: str) -> int:
         yt_dlp_path = "/app/yt-dlp"
     
     remote_components = os.environ.get("YTDLP_REMOTE_COMPONENTS", "ejs:github")
+    js_runtimes = os.environ.get("YTDLP_JS_RUNTIMES", "node,deno")
 
-    cmd = [
+    base_cmd = [
         yt_dlp_path,
         yt_url,
         "--no-playlist",
@@ -205,54 +199,94 @@ def download_audio(yt_url: str, output_path: str) -> int:
         "--socket-timeout", "30",
         # Improved player clients for better bypass
         "--extractor-args", "youtube:player_client=android,web;ios:player_client=apple_tv",
-        "--js-runtimes", "nodejs,deno",
+        "--js-runtimes", js_runtimes,
         "--remote-components", remote_components,
-        "--no-check-certificates",
         "--retries", "5",
         "--fragment-retries", "10",
         "--newline",
         "--progress",
         "--output", output_path
     ]
-    
-    # Use cookies if available in the app root
-    cookies_path = "/app/cookies.txt"
-    if os.path.exists(cookies_path):
-        cmd.extend(["--cookies", cookies_path])
-    elif os.path.exists("cookies.txt"):
-        cmd.extend(["--cookies", "cookies.txt"])
-    
-    # Use proxy if available (REQUIRED for Render/deployed servers)
+
+    def resolve_cookies_path() -> Optional[str]:
+        if os.environ.get("YTDLP_DISABLE_COOKIES", "").strip().lower() in ("1", "true", "yes"):
+            return None
+
+        configured = os.environ.get("YTDLP_COOKIES_PATH", "").strip()
+        if configured and os.path.exists(configured):
+            return configured
+
+        # Back-compat defaults.
+        for p in ("/app/cookies.txt", "cookies.txt"):
+            if os.path.exists(p):
+                return p
+
+        return None
+
+    def is_invalid_cookies(output: str) -> bool:
+        lower = output.lower()
+        return (
+            "cookies are no longer valid" in lower
+            or "provided youtube account cookies are no longer valid" in lower
+            or "provided youtube cookies are no longer valid" in lower
+        )
+
+    def run(cmd: list) -> tuple[int, str]:
+        process = subprocess.Popen(
+            cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            bufsize=1
+        )
+
+        tail: list[str] = []
+        for line in process.stdout:
+            line = line.rstrip("\n")
+            # Emit all lines to stderr so Node.js can see them in case of failure
+            print(line, file=sys.stderr)
+
+            tail.append(line)
+            if len(tail) > 250:
+                tail.pop(0)
+
+            # Parse progress from yt-dlp output
+            if "[download]" in line and "%" in line:
+                match = re.search(r'(\d+\.?\d*)%', line)
+                if match:
+                    percent = float(match.group(1))
+                    emit_progress("Downloading audio...", percent)
+
+            # Check for destination file
+            if "Destination:" in line:
+                emit_progress("Download complete, converting...", 95)
+
+        process.wait()
+        return process.returncode, "\n".join(tail)
+
+    cookies_path = resolve_cookies_path()
+
     proxy_url = os.environ.get("PROXY_URL")
     if proxy_url:
-        cmd.extend(["--proxy", proxy_url])
         print(f"Using proxy: {proxy_url}", file=sys.stderr)
-    
-    process = subprocess.Popen(
-        cmd,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,
-        text=True,
-        bufsize=1
-    )
-    
-    for line in process.stdout:
-        # Emit all lines to stderr so Node.js can see them in case of failure
-        print(line.strip(), file=sys.stderr)
-        
-        # Parse progress from yt-dlp output
-        if "[download]" in line and "%" in line:
-            match = re.search(r'(\d+\.?\d*)%', line)
-            if match:
-                percent = float(match.group(1))
-                emit_progress("Downloading audio...", percent)
-        
-        # Check for destination file
-        if "Destination:" in line:
-            emit_progress("Download complete, converting...", 95)
-    
-    process.wait()
-    return process.returncode
+
+    def build_cmd(include_cookies: bool) -> list:
+        cmd = list(base_cmd)
+        if proxy_url:
+            cmd.extend(["--proxy", proxy_url])
+        if include_cookies and cookies_path:
+            cmd.extend(["--cookies", cookies_path])
+        return cmd
+
+    include_cookies = bool(cookies_path)
+    code, out = run(build_cmd(include_cookies=include_cookies))
+
+    # Retry if the cookies file exists but yt-dlp says it's invalid (common on servers).
+    if code != 0 and include_cookies and is_invalid_cookies(out):
+        print("Detected invalid YouTube cookies; retrying without cookies.", file=sys.stderr)
+        code, _ = run(build_cmd(include_cookies=False))
+
+    return code
 
 
 def tag_with_spotify_metadata(filepath: str, metadata: Dict[str, Any]):

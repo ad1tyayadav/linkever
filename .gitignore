@@ -33,6 +33,9 @@ yarn-error.log*
 # env files (can opt-in for committing if needed)
 .env*
 
+# cookies (browser export / yt-dlp generated)
+cookies*.txt
+
 # vercel
 .vercel
 

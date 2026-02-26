@@ -196,6 +196,12 @@ function resolvePythonCmd(): string {
 }
 
 function parseBridgeError(output: string): string {
+    if (output.toLowerCase().includes("cookies are no longer valid")) {
+        return "YouTube cookies are expired/invalid on the server. Update cookies or set YTDLP_DISABLE_COOKIES=1.";
+    }
+    if (output.includes("Sign in to confirm youre not a bot") || output.includes("Sign in to confirm you're not a bot")) {
+        return "YouTube blocked the server/proxy (bot check). Try a different proxy/IP or provide fresh YouTube cookies.";
+    }
     if (output.includes("ytmusicapi not installed")) {
         return "ytmusicapi not installed. Run: pip install ytmusicapi";
     }

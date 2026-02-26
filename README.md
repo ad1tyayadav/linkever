@@ -16,6 +16,12 @@ bun dev
 
 Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
 
+## Media Downloads (yt-dlp / Spotify Bridge)
+
+- Some hosts/IPs require a proxy for YouTube/Spotify scraping: set `PROXY_URL` (see `.env.example`).
+- If YouTube starts returning “Sign in to confirm you’re not a bot”, your server IP/proxy is being challenged. Try a different proxy/IP (residential usually works better than datacenter).
+- If you use YouTube cookies, do **not** commit them. Provide them at runtime (secret/volume) and set `YTDLP_COOKIES_PATH`. You can disable cookie usage with `YTDLP_DISABLE_COOKIES=1`.
+
 You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
 
 This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
