@@ -37,6 +37,94 @@ interface SpotifyPageMetadata {
     spotifyUrl: string;
 }
 
+type SpotifyApiTrack = {
+    name?: string;
+    duration_ms?: number;
+    artists?: { name?: string }[];
+    album?: { images?: { url?: string; height?: number; width?: number }[]; name?: string };
+};
+
+let cachedSpotifyToken: { token: string; expiresAtMs: number } | null = null;
+
+function hasSpotifyApiCredentials(): boolean {
+    const id = (process.env.SPOTIFY_CLIENT_ID || "").trim();
+    const secret = (process.env.SPOTIFY_CLIENT_SECRET || "").trim();
+    return Boolean(id && secret);
+}
+
+async function getSpotifyAccessToken(): Promise<string> {
+    const cached = cachedSpotifyToken;
+    const now = Date.now();
+    if (cached && cached.expiresAtMs - 30_000 > now) return cached.token;
+
+    const clientId = (process.env.SPOTIFY_CLIENT_ID || "").trim();
+    const clientSecret = (process.env.SPOTIFY_CLIENT_SECRET || "").trim();
+    if (!clientId || !clientSecret) {
+        throw new Error("Spotify API credentials are not configured (SPOTIFY_CLIENT_ID / SPOTIFY_CLIENT_SECRET).");
+    }
+
+    const basic = Buffer.from(`${clientId}:${clientSecret}`).toString("base64");
+    const resp = await axios.post(
+        "https://accounts.spotify.com/api/token",
+        new URLSearchParams({ grant_type: "client_credentials" }),
+        {
+            headers: {
+                Authorization: `Basic ${basic}`,
+                "Content-Type": "application/x-www-form-urlencoded",
+            },
+            timeout: 15_000,
+            proxy: process.env.PROXY_URL ? parseProxyUrl(process.env.PROXY_URL) : false,
+            validateStatus: () => true,
+        }
+    );
+
+    if (resp.status !== 200 || !resp.data?.access_token) {
+        throw new Error(`Spotify token request failed (status ${resp.status}).`);
+    }
+
+    const token = String(resp.data.access_token);
+    const expiresIn = Number(resp.data.expires_in || 3600);
+    cachedSpotifyToken = { token, expiresAtMs: now + Math.max(60, expiresIn) * 1000 };
+    return token;
+}
+
+async function fetchSpotifyTrackViaApi(spotifyUrl: string): Promise<SpotifyPageMetadata> {
+    const info = parseSpotifyUrl(spotifyUrl);
+    if (!info) throw new Error("Invalid Spotify URL");
+    if (info.type !== "track") throw new Error(`Spotify ${info.type} is not supported. Please use a track URL.`);
+
+    const token = await getSpotifyAccessToken();
+    const resp = await axios.get(`https://api.spotify.com/v1/tracks/${info.id}`, {
+        headers: { Authorization: `Bearer ${token}` },
+        timeout: 15_000,
+        proxy: process.env.PROXY_URL ? parseProxyUrl(process.env.PROXY_URL) : false,
+        validateStatus: () => true,
+    });
+
+    if (resp.status !== 200) {
+        throw new Error(`Spotify API track request failed (status ${resp.status}).`);
+    }
+
+    const track = resp.data as SpotifyApiTrack;
+    const title = track?.name || "Unknown";
+    const artist = (track?.artists || []).map((a) => a.name).filter(Boolean).join(", ") || "Unknown";
+    const duration = Math.round(Number(track?.duration_ms || 0) / 1000);
+    const album = track?.album?.name || "";
+
+    const images = track?.album?.images || [];
+    const largest = images.reduce<{ url?: string; height?: number; width?: number } | null>(
+        (best, img) => {
+            const bestScore = (best?.height || 0) * (best?.width || 0);
+            const imgScore = (img?.height || 0) * (img?.width || 0);
+            return !best || imgScore > bestScore ? img : best;
+        },
+        null
+    );
+    const artwork = largest?.url || null;
+
+    return { title, artist, album, artwork, duration, spotifyUrl };
+}
+
 /**
  * Scrape Spotify embed page for metadata - no API key needed.
  * The embed page (open.spotify.com/embed/track/ID) returns server-rendered HTML
@@ -151,8 +239,25 @@ export async function resolveSpotifyUrl(url: string) {
         throw new Error(`Spotify ${info.type} scraping is not yet supported. Please use a track URL.`);
     }
 
-    // Scrape the Spotify page for metadata
-    const metadata = await scrapeSpotifyMetadata(resolvedUrl);
+    // Scrape the Spotify page for metadata (no API creds). If blocked in production, fallback to Spotify Web API.
+    let metadata: SpotifyPageMetadata;
+    try {
+        metadata = await scrapeSpotifyMetadata(resolvedUrl);
+    } catch (err) {
+        const hasProxy = Boolean((process.env.PROXY_URL || "").trim());
+        const canUseApi = hasSpotifyApiCredentials();
+        const msg = err instanceof Error ? err.message : String(err);
+        console.log(`[linkever] Spotify scrape failed: ${msg.slice(0, 160)}`);
+
+        if (canUseApi) {
+            metadata = await fetchSpotifyTrackViaApi(resolvedUrl);
+        } else {
+            const suggestion = hasProxy
+                ? "Spotify page scrape failed from this server. If this keeps happening, set SPOTIFY_CLIENT_ID / SPOTIFY_CLIENT_SECRET for API fallback."
+                : "Spotify page scrape may be blocked from this server IP. Set PROXY_URL or set SPOTIFY_CLIENT_ID / SPOTIFY_CLIENT_SECRET for API fallback.";
+            throw new Error(`${msg}. ${suggestion}`);
+        }
+    }
 
     const track: SpotifyTrack = {
         id: info.id,

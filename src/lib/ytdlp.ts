@@ -17,6 +17,18 @@ const rawFfmpeg = process.env.FFMPEG_PATH || "";
 const FFMPEG_PATH = rawFfmpeg && rawFfmpeg !== "ffmpeg" && (path.isAbsolute(rawFfmpeg) || process.platform === "win32") ? rawFfmpeg : "";
 const DOWNLOAD_DIR = path.join(os.tmpdir(), "linkever-downloads");
 
+function isYtdlpProxyDisabled(): boolean {
+    const v = (process.env.YTDLP_DISABLE_PROXY || "").trim().toLowerCase();
+    return v === "1" || v === "true" || v === "yes";
+}
+
+function getYtdlpProxyUrl(): string | null {
+    const proxy = (process.env.PROXY_URL || "").trim();
+    if (!proxy) return null;
+    if (isYtdlpProxyDisabled()) return null;
+    return proxy;
+}
+
 type YtdlpErrorKind =
     | "BOT_CHECK"
     | "INVALID_COOKIES"
@@ -27,6 +39,12 @@ type YtdlpErrorKind =
     | "UNAVAILABLE"
     | "LIVE"
     | "UNKNOWN";
+
+function getErrorKind(err: unknown): YtdlpErrorKind | undefined {
+    if (!err || typeof err !== "object") return undefined;
+    const kind = (err as Record<string, unknown>).kind;
+    return typeof kind === "string" ? (kind as YtdlpErrorKind) : undefined;
+}
 
 let runtimeCookiesPath: string | null = null;
 let runtimeCookiesInitAttempted = false;
@@ -163,7 +181,9 @@ export type ProgressCallback = (progress: DownloadProgress) => void;
 // ─── Metadata Fetch ─────────────────────────────────────────────────────────
 
 export async function fetchMetadata(url: string): Promise<MediaMetadata & { availableFormats: FormatOption[] }> {
-    const runOnce = (withCookies: boolean) =>
+    const proxyUrl = getYtdlpProxyUrl();
+
+    const runOnce = (withCookies: boolean, useProxy: boolean) =>
         new Promise<MediaMetadata & { availableFormats: FormatOption[] }>((resolve, reject) => {
             const args = [
                 "--dump-json",
@@ -184,8 +204,8 @@ export async function fetchMetadata(url: string): Promise<MediaMetadata & { avai
             }
 
             // Use proxy if available
-            if (process.env.PROXY_URL) {
-                args.push("--proxy", process.env.PROXY_URL);
+            if (useProxy && proxyUrl) {
+                args.push("--proxy", proxyUrl);
             }
 
             if (withCookies) {
@@ -246,10 +266,22 @@ export async function fetchMetadata(url: string): Promise<MediaMetadata & { avai
         });
 
     const cookies = resolveCookiesArgs();
-    if (!cookies.used) return runOnce(false);
+    const useProxy = Boolean(proxyUrl);
+
+    if (!cookies.used) {
+        try {
+            return await runOnce(false, useProxy);
+        } catch (err) {
+            const kind = getErrorKind(err);
+            if (kind === "BOT_CHECK" && useProxy) {
+                return await runOnce(false, false);
+            }
+            throw err;
+        }
+    }
 
     try {
-        return await runOnce(true);
+        return await runOnce(true, useProxy);
     } catch (err) {
         const stderr =
             err && typeof err === "object" && "stderr" in err
@@ -257,7 +289,20 @@ export async function fetchMetadata(url: string): Promise<MediaMetadata & { avai
                 : undefined;
 
         if (typeof stderr === "string" && isInvalidCookiesError(stderr)) {
-            return await runOnce(false);
+            try {
+                return await runOnce(false, useProxy);
+            } catch (err2) {
+                const kind2 = getErrorKind(err2);
+                if (kind2 === "BOT_CHECK" && useProxy) {
+                    return await runOnce(false, false);
+                }
+                throw err2;
+            }
+        }
+
+        const kind = getErrorKind(err);
+        if (kind === "BOT_CHECK" && useProxy) {
+            return await runOnce(true, false);
         }
         throw err;
     }
@@ -309,8 +354,9 @@ export async function download(
     }
 
     // Use proxy if available
-    if (process.env.PROXY_URL) {
-        args.push("--proxy", process.env.PROXY_URL);
+    const proxyUrl = getYtdlpProxyUrl();
+    if (proxyUrl) {
+        args.push("--proxy", proxyUrl);
     }
 
     const cookies = resolveCookiesArgs();

@@ -59,8 +59,17 @@ export async function spotifyBridgeDownload(
             try { proc.kill("SIGTERM"); } catch { /* ignore */ }
         }, 600_000);
 
+        const env: NodeJS.ProcessEnv = { ...process.env };
+        // Ensure the Python bridge can find cookies.txt when running from a temp output directory.
+        // (The bridge defaults to /app/cookies.txt or ./cookies.txt.)
+        if (!env.YTDLP_COOKIES_PATH) {
+            const fallback = path.join(process.cwd(), "cookies.txt");
+            if (fsSync.existsSync(fallback)) env.YTDLP_COOKIES_PATH = fallback;
+        }
+
         const proc = spawn(PYTHON_CMD, args, {
-            cwd: dir,
+            cwd: process.cwd(),
+            env,
         });
 
         let stderr = "";

@@ -294,6 +294,8 @@ def download_audio(yt_url: str, output_path: str) -> int:
     cookies_path = resolve_cookies_path()
 
     proxy_url = os.environ.get("PROXY_URL")
+    if os.environ.get("YTDLP_DISABLE_PROXY", "").strip().lower() in ("1", "true", "yes"):
+        proxy_url = None
     if proxy_url:
         # Avoid leaking proxy credentials to client-facing logs.
         print("Using proxy (redacted)", file=sys.stderr)

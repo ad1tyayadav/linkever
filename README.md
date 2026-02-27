@@ -19,6 +19,7 @@ Open [http://localhost:3000](http://localhost:3000) with your browser to see the
 ## Media Downloads (yt-dlp / Spotify Bridge)
 
 - Some hosts/IPs require a proxy for YouTube/Spotify scraping: set `PROXY_URL` (see `.env.example`).
+- If a proxy makes YouTube worse, set `YTDLP_DISABLE_PROXY=1` to force yt-dlp to run without it.
 - If YouTube starts returning “Sign in to confirm you’re not a bot”, your server IP/proxy is being challenged. Try a different proxy/IP (residential usually works better than datacenter).
 - If you use YouTube cookies, do **not** commit them. Provide them at runtime (secret/volume) and set `YTDLP_COOKIES_PATH`, or set `YTDLP_COOKIES_B64` (base64 of a Netscape `cookies.txt`). You can disable cookie usage with `YTDLP_DISABLE_COOKIES=1`.
 
